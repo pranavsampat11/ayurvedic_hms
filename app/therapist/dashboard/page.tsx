@@ -290,7 +290,7 @@ export default function TherapistDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>Search Type</Label>
-              <Select value={searchType} onValueChange={(value: "opd" | "ipd") => setSearchType(value)}>
+              <Select value={searchType} onValueChange={(value) => setSearchType(value as "opd" | "ipd")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
