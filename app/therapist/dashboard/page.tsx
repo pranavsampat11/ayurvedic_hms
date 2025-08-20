@@ -25,7 +25,8 @@ export default function TherapistDashboard() {
   const [loading, setLoading] = useState(true);
   
   // Search and assignment states
-  const [searchType, setSearchType] = useState<"opd" | "ipd">("opd");
+  // Avoid TSX generic parsing issues in some build environments
+  const [searchType, setSearchType] = useState("opd" as "opd" | "ipd");
   const [searchNumber, setSearchNumber] = useState("");
   const [patientProcedures, setPatientProcedures] = useState<any[]>([]);
   const [selectedProcedure, setSelectedProcedure] = useState("");
@@ -204,6 +205,9 @@ export default function TherapistDashboard() {
     return assignment.opd_no ? "OPD" : "IPD";
   };
 
+  // Safer handler to avoid TSX generic parsing quirks in some build envs
+  const onSearchType = (v: string) => setSearchType(v === 'ipd' ? 'ipd' : 'opd');
+
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
@@ -290,7 +294,7 @@ export default function TherapistDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>Search Type</Label>
-              <Select value={searchType} onValueChange={(value) => setSearchType(value as "opd" | "ipd")}>
+              <Select value={searchType} onValueChange={onSearchType}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
