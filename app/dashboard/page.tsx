@@ -237,6 +237,12 @@ export default function DashboardPage() {
     return <div className="flex items-center justify-center h-screen text-lg">Loading...</div>
   }
 
+  if (currentRole === "admin") {
+    // Redirect to admin dashboard
+    window.location.href = "/admin/dashboard"
+    return <div className="flex items-center justify-center h-screen text-lg">Redirecting to Admin Dashboard...</div>
+  }
+
   if (currentRole === "doctor") {
     return <DoctorDashboard />
   }

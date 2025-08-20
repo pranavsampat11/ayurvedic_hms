@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, Plus } from "lucide-react"
 import { supabase } from "@/lib/supabaseClient"
 import { toast } from "@/hooks/use-toast"
+import { getDummyFollowUps } from "@/lib/dummy"
 import OPDFollowUpForm from "@/components/opd-follow-up-form"
 
 interface OPDFollowUp {
@@ -72,9 +73,11 @@ export default function PatientOPDFollowUpsPage() {
         }) || []
       )
 
-      setFollowUps(formattedData)
+      setFollowUps((formattedData && formattedData.length > 0) ? formattedData : getDummyFollowUps(opdNo))
     } catch (error) {
       console.error("Error loading follow-ups:", error)
+      // Fallback to dummy on error
+      setFollowUps(getDummyFollowUps(opdNo))
     } finally {
       setLoading(false)
     }

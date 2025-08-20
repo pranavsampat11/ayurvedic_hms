@@ -28,6 +28,12 @@ export default function MyPatientsPage() {
   const [showTodaysAppointments, setShowTodaysAppointments] = useState(false);
   const doctorId = typeof window !== 'undefined' ? localStorage.getItem("userId") : null
   const router = useRouter();
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [patientsPerPage] = useState(10);
+  const [pagePatients, setPagePatients] = useState<any[]>([]); // server-side page data
+  const [totalCount, setTotalCount] = useState<number>(0);
 
   useEffect(() => {
     async function fetchPatients() {
@@ -52,14 +58,11 @@ export default function MyPatientsPage() {
       // For each appointment, get the OPD visit and check if case sheet exists
       const enrichedPatients = await Promise.all(
         (appointments || []).map(async (appointment) => {
-          // Get OPD visit for this appointment
           const { data: opdVisit } = await supabase
             .from("opd_visits")
             .select("opd_no, visit_date")
             .eq("appointment_id", appointment.id)
             .single();
-
-          // Check if case sheet exists for this OPD
           let hasCaseSheet = false;
           if (opdVisit?.opd_no) {
             const { data: caseSheet } = await supabase
@@ -69,31 +72,75 @@ export default function MyPatientsPage() {
               .single();
             hasCaseSheet = !!caseSheet;
           }
-
-          // Update appointment status to "seen" if case sheet exists
           if (hasCaseSheet && appointment.status !== "seen") {
-            await supabase
-              .from("appointments")
-              .update({ status: "seen" })
-              .eq("id", appointment.id);
+            await supabase.from("appointments").update({ status: "seen" }).eq("id", appointment.id);
           }
-
-          return {
-            ...appointment,
-            opd_visit: opdVisit,
-            has_case_sheet: hasCaseSheet,
-            status: hasCaseSheet ? "seen" : appointment.status
-          };
+          return { ...appointment, opd_visit: opdVisit, has_case_sheet: hasCaseSheet, status: hasCaseSheet ? "seen" : appointment.status };
         })
       );
 
-      console.log("Enriched patients data:", enrichedPatients);
       setAllPatients(enrichedPatients);
       setPatients(enrichedPatients);
       setLoading(false);
     }
     fetchPatients();
   }, [doctorId]);
+
+  // Server-side pagination when filters are empty and default view
+  const canUseServerPagination =
+    !showTodaysAppointments &&
+    search.trim() === "" &&
+    fromDate === "" &&
+    toDate === "" &&
+    filterStatus === "" &&
+    filterGender === "" &&
+    filterType === "" &&
+    sortKey === "appointment_date" &&
+    sortDir === "desc";
+
+  useEffect(() => {
+    async function loadServerPage() {
+      if (!doctorId || !canUseServerPagination) return;
+      setLoading(true);
+      const from = (currentPage - 1) * patientsPerPage;
+      const to = from + patientsPerPage - 1;
+      const { data, count, error } = await supabase
+        .from("appointments")
+        .select(`*,
+          patient:uhid(full_name, age, gender, mobile, address),
+          department:department_id(name),
+          sub_department:sub_department_id(name)
+        `, { count: "exact" })
+        .eq("doctor_id", doctorId)
+        .order("appointment_date", { ascending: false })
+        .range(from, to);
+      if (!error) {
+        const enriched = await Promise.all(
+          (data || []).map(async (appointment) => {
+            const { data: opdVisit } = await supabase
+              .from("opd_visits")
+              .select("opd_no, visit_date")
+              .eq("appointment_id", appointment.id)
+              .maybeSingle();
+            let hasCaseSheet = false;
+            if (opdVisit?.opd_no) {
+              const { data: caseSheet } = await supabase
+                .from("opd_case_sheets")
+                .select("id")
+                .eq("opd_no", opdVisit.opd_no)
+                .maybeSingle();
+              hasCaseSheet = !!caseSheet;
+            }
+            return { ...appointment, opd_visit: opdVisit, has_case_sheet: hasCaseSheet, status: hasCaseSheet ? "seen" : appointment.status };
+          })
+        );
+        setPagePatients(enriched);
+        setTotalCount(count || 0);
+      }
+      setLoading(false);
+    }
+    loadServerPage();
+  }, [doctorId, canUseServerPagination, currentPage, patientsPerPage, sortKey, sortDir]);
 
   const filtered = patients
     .filter(p => {
@@ -177,6 +224,16 @@ export default function MyPatientsPage() {
     }
   }
 
+  // Pagination logic
+  const indexOfLastPatient = currentPage * patientsPerPage;
+  const indexOfFirstPatient = indexOfLastPatient - patientsPerPage;
+  const currentPatients = canUseServerPagination ? pagePatients : filtered.slice(indexOfFirstPatient, indexOfLastPatient);
+  const totalPages = Math.ceil((canUseServerPagination ? totalCount : filtered.length) / patientsPerPage);
+
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+  };
+
   const handleSuggestIPD = async (p: any, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent row click
     console.log("Full patient data:", p);
@@ -207,7 +264,7 @@ export default function MyPatientsPage() {
         uhid: uhid,
         doctor_id: doctorId,
         status: "pending",
-        notes: `IPD admission requested by doctor for patient ${p.patient.full_name}`
+        notes: `IPD admission request sent by doctor for patient ${p.patient.full_name}`
       }
     ]);
     
@@ -287,187 +344,254 @@ export default function MyPatientsPage() {
               setFilterType("");
               setShowTodaysAppointments(false);
               setPatients(allPatients);
+              setCurrentPage(1); // Reset to first page when clearing filters
             }}
             className="text-sm"
           >
             Clear Filters
           </Button>
         </div>
-        {loading ? <div>Loading...</div> : (
-          <div className="overflow-auto border border-slate-200 rounded-lg shadow-sm bg-white">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-                  <TableHead 
-                    onClick={() => handleSort("patient.full_name")}
-                    className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
-                  >
-                    <div className="flex items-center gap-1">
-                      Patient Name
-                      {sortKey === "patient.full_name" && (
-                        sortDir === "asc" ? 
-                        <ArrowUp className="inline w-4 h-4 text-blue-600" /> : 
-                        <ArrowDown className="inline w-4 h-4 text-blue-600" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    onClick={() => handleSort("patient.age")}
-                    className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
-                  >
-                    <div className="flex items-center gap-1">
-                      Age / Gender
-                      {sortKey === "patient.age" && (
-                        sortDir === "asc" ? 
-                        <ArrowUp className="inline w-4 h-4 text-blue-600" /> : 
-                        <ArrowDown className="inline w-4 h-4 text-blue-600" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    onClick={() => handleSort("patient.mobile")}
-                    className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
-                  >
-                    Contact Number
-                  </TableHead>
-                  <TableHead 
-                    onClick={() => handleSort("department.name")}
-                    className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
-                  >
-                    Department
-                  </TableHead>
-                  <TableHead 
-                    onClick={() => handleSort("sub_department.name")}
-                    className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
-                  >
-                    Sub-Department
-                  </TableHead>
-                  <TableHead 
-                    onClick={() => handleSort("status")}
-                    className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
-                  >
-                    Status
-                  </TableHead>
-                  <TableHead 
-                    onClick={() => handleSort("appointment_date")}
-                    className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
-                  >
-                    <div className="flex items-center gap-1">
-                      Consultation Date
-                      {sortKey === "appointment_date" && (
-                        sortDir === "asc" ? 
-                        <ArrowUp className="inline w-4 h-4 text-blue-600" /> : 
-                        <ArrowDown className="inline w-4 h-4 text-blue-600" />
-                      )}
-                    </div>
-                  </TableHead>
-                  <TableHead 
-                    onClick={() => handleSort("reason")}
-                    className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
-                  >
-                    Complaint
-                  </TableHead>
-                  <TableHead className="font-semibold text-slate-700 px-4 py-3">
-                    OPD Number
-                  </TableHead>
-                  <TableHead className="font-semibold text-slate-700 px-4 py-3">
-                    Actions
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} className="text-center py-12 text-slate-500">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
-                          <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="font-semibold text-lg">No patients found</p>
-                          <p className="text-sm">Try adjusting your search or filter criteria</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filtered.map((p, index) => (
-                    <TableRow 
-                      key={p.id} 
-                      className={`cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-25'}`}
-                      onClick={() => router.push(`/dashboard/patients/${p.opd_visit?.opd_no || 'opd'}/initial-assessment`)}
+        {loading ? (
+          <div>Loading...</div>
+        ) : (
+          <>
+            <div className="overflow-auto border border-slate-200 rounded-lg shadow-sm bg-white">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                    <TableHead 
+                      onClick={() => handleSort("patient.full_name")}
+                      className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
                     >
-                      <TableCell className="px-4 py-4">
-                        <div className="font-semibold text-slate-900">{p.patient?.full_name}</div>
-                      </TableCell>
-                      <TableCell className="px-4 py-4">
-                        <div className="text-slate-700">
-                          <span className="font-semibold">{p.patient?.age}</span>
-                          <span className="text-slate-500 ml-1">/ {p.patient?.gender}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="px-4 py-4">
-                        <div className="text-slate-700 font-mono text-sm">{p.patient?.mobile}</div>
-                      </TableCell>
-                      <TableCell className="px-4 py-4">
-                        <div className="text-slate-700 font-medium">{p.department?.name || '-'}</div>
-                      </TableCell>
-                      <TableCell className="px-4 py-4">
-                        <div className="text-slate-700">{p.sub_department?.name || '-'}</div>
-                      </TableCell>
-                      <TableCell className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className={`font-semibold ${
-                            p.has_case_sheet ? "text-emerald-600" : 
-                            p.status === 'pending' ? "text-amber-600" : 
-                            p.status === 'seen' ? "text-blue-600" : 
-                            "text-slate-600"
-                          }`}>
-                            {p.status}
-                          </span>
-                          {p.has_case_sheet && (
-                            <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full border border-emerald-200 font-medium">
-                              Case Sheet
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="px-4 py-4">
-                        <div className="text-slate-700 font-medium">{p.appointment_date}</div>
-                      </TableCell>
-                      <TableCell className="px-4 py-4">
-                        <div className="text-slate-700 max-w-xs truncate" title={p.reason}>
-                          {p.reason || '-'}
-                        </div>
-                      </TableCell>
-                      <TableCell className="px-4 py-4">
-                        <div className="font-mono text-sm text-slate-700 font-medium">{p.opd_visit?.opd_no || '-'}</div>
-                      </TableCell>
-                      <TableCell className="px-4 py-4">
-                        {p.status !== 'admitted' && p.opd_visit?.opd_no && (
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={(e) => handleSuggestIPD(p, e)}
-                            className="border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors"
-                          >
-                            Suggest IPD Admission
-                          </Button>
+                      <div className="flex items-center gap-1">
+                        Patient Name
+                        {sortKey === "patient.full_name" && (
+                          sortDir === "asc" ? 
+                          <ArrowUp className="inline w-4 h-4 text-blue-600" /> : 
+                          <ArrowDown className="inline w-4 h-4 text-blue-600" />
                         )}
-                        {!p.opd_visit?.opd_no && (
-                          <span className="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                            No OPD Visit
-                          </span>
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      onClick={() => handleSort("patient.age")}
+                      className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
+                    >
+                      <div className="flex items-center gap-1">
+                        Age / Gender
+                        {sortKey === "patient.age" && (
+                          sortDir === "asc" ? 
+                          <ArrowUp className="inline w-4 h-4 text-blue-600" /> : 
+                          <ArrowDown className="inline w-4 h-4 text-blue-600" />
                         )}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      onClick={() => handleSort("patient.mobile")}
+                      className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
+                    >
+                      Contact Number
+                    </TableHead>
+                    <TableHead 
+                      onClick={() => handleSort("department.name")}
+                      className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
+                    >
+                      Department
+                    </TableHead>
+                    <TableHead 
+                      onClick={() => handleSort("sub_department.name")}
+                      className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
+                    >
+                      Sub-Department
+                    </TableHead>
+                    <TableHead 
+                      onClick={() => handleSort("status")}
+                      className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
+                    >
+                      Status
+                    </TableHead>
+                    <TableHead 
+                      onClick={() => handleSort("appointment_date")}
+                      className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
+                    >
+                      <div className="flex items-center gap-1">
+                        Consultation Date
+                        {sortKey === "appointment_date" && (
+                          sortDir === "asc" ? 
+                          <ArrowUp className="inline w-4 h-4 text-blue-600" /> : 
+                          <ArrowDown className="inline w-4 h-4 text-blue-600" />
+                        )}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      onClick={() => handleSort("reason")}
+                      className="font-semibold text-slate-700 cursor-pointer hover:bg-slate-200 transition-colors px-4 py-3"
+                    >
+                      Complaint
+                    </TableHead>
+                    <TableHead className="font-semibold text-slate-700 px-4 py-3">
+                      OPD Number
+                    </TableHead>
+                    <TableHead className="font-semibold text-slate-700 px-4 py-3">
+                      Actions
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={10} className="text-center py-12 text-slate-500">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
+                            <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-lg">No patients found</p>
+                            <p className="text-sm">Try adjusting your search or filter criteria</p>
+                          </div>
+                        </div>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ) : (
+                    currentPatients.map((p, index) => (
+                      <TableRow 
+                        key={p.id} 
+                        className={`cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-25'}`}
+                        onClick={() => router.push(`/dashboard/patients/${p.opd_visit?.opd_no || 'opd'}/initial-assessment`)}
+                      >
+                        <TableCell className="px-4 py-4">
+                          <div className="font-semibold text-slate-900">{p.patient?.full_name}</div>
+                        </TableCell>
+                        <TableCell className="px-4 py-4">
+                          <div className="text-slate-700">
+                            <span className="font-semibold">{p.patient?.age}</span>
+                            <span className="text-slate-500 ml-1">/ {p.patient?.gender}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-4 py-4">
+                          <div className="text-slate-700 font-mono text-sm">{p.patient?.mobile}</div>
+                        </TableCell>
+                        <TableCell className="px-4 py-4">
+                          <div className="text-slate-700 font-medium">{p.department?.name || '-'}</div>
+                        </TableCell>
+                        <TableCell className="px-4 py-4">
+                          <div className="text-slate-700">{p.sub_department?.name || '-'}</div>
+                        </TableCell>
+                        <TableCell className="px-4 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className={`font-semibold ${
+                              p.has_case_sheet ? "text-emerald-600" : 
+                              p.status === 'pending' ? "text-amber-600" : 
+                              p.status === 'seen' ? "text-blue-600" : 
+                              "text-slate-600"
+                            }`}>
+                              {p.status}
+                            </span>
+                            {p.has_case_sheet && (
+                              <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full border border-emerald-200 font-medium">
+                                Case Sheet
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-4 py-4">
+                          <div className="text-slate-700 font-medium">{p.appointment_date}</div>
+                        </TableCell>
+                        <TableCell className="px-4 py-4">
+                          <div className="text-slate-700 max-w-xs truncate" title={p.reason}>
+                            {p.reason || '-'}
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-4 py-4">
+                          <div className="font-mono text-sm text-slate-700 font-medium">{p.opd_visit?.opd_no || '-'}</div>
+                        </TableCell>
+                        <TableCell className="px-4 py-4">
+                          {p.status !== 'admitted' && p.opd_visit?.opd_no && (
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={(e) => handleSuggestIPD(p, e)}
+                              className="border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors"
+                            >
+                              Suggest IPD Admission
+                            </Button>
+                          )}
+                          {!p.opd_visit?.opd_no && (
+                            <span className="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                              No OPD Visit
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            
+            {/* Pagination Controls */}
+            {(canUseServerPagination ? totalCount : filtered.length) > patientsPerPage && (
+              <div className="flex items-center justify-between mt-4">
+                <div className="text-sm text-gray-700">
+                  {canUseServerPagination ? (
+                    <>Showing {(currentPage - 1) * patientsPerPage + 1} to {Math.min(currentPage * patientsPerPage, totalCount)} of {totalCount} patients</>
+                  ) : (
+                    <>Showing {indexOfFirstPatient + 1} to {Math.min(indexOfLastPatient, filtered.length)} of {filtered.length} patients</>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1"
+                  >
+                    Previous
+                  </Button>
+                  
+                  {/* Page Numbers */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNumber;
+                      if (totalPages <= 5) {
+                        pageNumber = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNumber = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNumber = totalPages - 4 + i;
+                      } else {
+                        pageNumber = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <Button
+                          key={pageNumber}
+                          variant={currentPage === pageNumber ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handlePageChange(pageNumber)}
+                          className="px-3 py-1 min-w-[40px]"
+                        >
+                          {pageNumber}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </DoctorDashboardLayout>

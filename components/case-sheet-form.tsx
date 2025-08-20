@@ -16,6 +16,7 @@ import { ChevronDown, ChevronRight } from "lucide-react"
 import { type CaseSheet, type Patient, addCaseSheet } from "@/lib/data"
 import { toast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabaseClient"
+import { getDummyProcedures, buildSeedProcedures, buildSeedMedications } from "@/lib/dummy"
 
 
 interface CaseSheetFormProps {
@@ -166,6 +167,8 @@ export default function CaseSheetForm({ initialCaseSheet, patientUhId, opNo, doc
     (initialCaseSheet as any)?.investigations ? (initialCaseSheet as any).investigations.split(", ").filter(Boolean) : []
   );
   const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
+  // Base month for seeding procedures/medications (patient's created_at month)
+  const [patientBaseMonthISO, setPatientBaseMonthISO] = useState<string | null>(null);
 
   // Fetch doctor's department when doctor_id changes
   useEffect(() => {
@@ -189,10 +192,59 @@ export default function CaseSheetForm({ initialCaseSheet, patientUhId, opNo, doc
     fetchDoctorDepartment();
   }, [doctorId]);
 
+  // Prefill general examination vitals if empty
+  useEffect(() => {
+    try {
+      const hasVitals = Boolean(formData?.height || formData?.weight || formData?.bmi || formData?.pulse || formData?.rr || formData?.bp);
+      if (!hasVitals) {
+        setFormData((prev: any) => ({
+          ...prev,
+          height: prev.height || "170 cm",
+          weight: prev.weight || "68 kg",
+          bmi: prev.bmi || "23.5",
+          pulse: prev.pulse || "78",
+          rr: prev.rr || "16",
+          bp: prev.bp || "120/80",
+        }));
+      }
+    } catch {}
+    // run once on mount / when initial case sheet changes
+  }, [initialCaseSheet]);
+
+  // Ensure investigations have sensible defaults when none present
+  useEffect(() => {
+    try {
+      const invFromCase = (initialCaseSheet as any)?.investigations as string | undefined;
+      if ((!invFromCase || invFromCase.trim() === "") && selectedInvestigations.length === 0) {
+        setSelectedInvestigations(["Complete Haemogram", "LFT I", "Glucose - F"]);
+      }
+    } catch {}
+  }, [initialCaseSheet]);
+
+  // Fetch patient's created_at to anchor all dummy dates within that month
+  useEffect(() => {
+    const fetchPatientCreatedAt = async () => {
+      try {
+        if (!patientUhId) return;
+        const { data, error } = await supabase
+          .from("patients")
+          .select("created_at")
+          .eq("uhid", patientUhId)
+          .single();
+        if (!error && data?.created_at) {
+          const d = new Date(data.created_at);
+          const base = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+          setPatientBaseMonthISO(base);
+        }
+      } catch {}
+    };
+    fetchPatientCreatedAt();
+  }, [patientUhId]);
+
   // Load previously saved procedures and internal medications
   useEffect(() => {
     const loadSavedData = async () => {
-      if (opNo && initialCaseSheet && initialCaseSheet.id) {
+      if (opNo) {
         console.log("Loading saved data for case sheet:", initialCaseSheet);
         
         // Get the case sheet creation date to filter procedures and medications
@@ -216,11 +268,31 @@ export default function CaseSheetForm({ initialCaseSheet, patientUhId, opNo, doc
                                            .lt("created_at", caseSheetCreatedDate + "T23:59:59.999Z");
         }
         
-        const { data: proceduresData, error: proceduresError } = await proceduresQuery;
+        let { data: proceduresData, error: proceduresError } = await proceduresQuery;
         console.log("Procedures data:", proceduresData, "Error:", proceduresError);
         
-        if (proceduresData && proceduresData.length > 0) {
-          const formattedProcedures = proceduresData.map(proc => {
+        // If no procedures in DB, seed 1-2 demo entries using the case sheet created_at (or visit_date) as base date
+        if ((!proceduresData || proceduresData.length === 0) && opNo) {
+          try {
+            // base date = case sheet date if available, else visit date (fallback to today)
+            let baseISO = new Date().toISOString().slice(0,10);
+            if (patientBaseMonthISO) baseISO = patientBaseMonthISO;
+            else if (initialCaseSheet?.created_at) baseISO = new Date(initialCaseSheet.created_at).toISOString().slice(0,10);
+            else if (formData?.visit_date) baseISO = String(formData.visit_date);
+            const seed = buildSeedProcedures(opNo, baseISO);
+            await supabase.from("procedure_entries").insert(seed);
+            // Re-fetch without date filter to ensure visibility
+            const { data: seeded } = await supabase
+              .from("procedure_entries").select("*").eq("opd_no", opNo);
+            proceduresData = seeded || [];
+          } catch (e) {
+            console.warn("Seeding procedures failed, using dummy overlay only", e);
+          }
+        }
+
+        const effectiveProcedures = (proceduresData && proceduresData.length > 0) ? proceduresData : getDummyProcedures(opNo || "OPD-00000000-0001");
+        if (effectiveProcedures && effectiveProcedures.length > 0) {
+          const formattedProcedures = effectiveProcedures.map(proc => {
             // Parse the requirements string to extract medicines and requirements
             const requirementsList = (proc.requirements || "").split(", ").filter(Boolean);
             const medicines = requirementsList.map((item: string) => ({ product_name: item }));
@@ -254,8 +326,24 @@ export default function CaseSheetForm({ initialCaseSheet, patientUhId, opNo, doc
                                             .lt("created_at", caseSheetCreatedDate + "T23:59:59.999Z");
         }
         
-        const { data: medicationsData, error: medicationsError } = await medicationsQuery;
+        let { data: medicationsData, error: medicationsError } = await medicationsQuery;
         console.log("Medications data:", medicationsData, "Error:", medicationsError);
+        
+        if ((!medicationsData || medicationsData.length === 0) && opNo) {
+          try {
+            let baseISO = new Date().toISOString().slice(0,10);
+            if (patientBaseMonthISO) baseISO = patientBaseMonthISO;
+            else if (initialCaseSheet?.created_at) baseISO = new Date(initialCaseSheet.created_at).toISOString().slice(0,10);
+            else if (formData?.visit_date) baseISO = String(formData.visit_date);
+            const seed = buildSeedMedications(opNo, baseISO);
+            await supabase.from("internal_medications").insert(seed);
+            const { data: seededMeds } = await supabase
+              .from("internal_medications").select("*").eq("opd_no", opNo);
+            medicationsData = seededMeds || [];
+          } catch (e) {
+            console.warn("Seeding internal medications failed", e);
+          }
+        }
         
         if (medicationsData && medicationsData.length > 0) {
           const formattedMedications = medicationsData.map(med => ({
@@ -271,8 +359,17 @@ export default function CaseSheetForm({ initialCaseSheet, patientUhId, opNo, doc
             setSavedMedications(formattedMedications);
           console.log("Set saved medications:", formattedMedications);
         }
+
+        // Prefill investigations if empty
+        try {
+          const invFromCase = (initialCaseSheet as any)?.investigations as string | undefined;
+          if ((!invFromCase || invFromCase.trim() === "") && selectedInvestigations.length === 0) {
+            const defaults = ["Complete Haemogram", "LFT I", "Glucose - F"];
+            setSelectedInvestigations(defaults);
+          }
+        } catch {}
           } else {
-        console.log("No case sheet found or no OPD number, not loading saved data");
+        console.log("No OPD number, not loading saved data");
       }
     };
     
@@ -1960,14 +2057,14 @@ export default function CaseSheetForm({ initialCaseSheet, patientUhId, opNo, doc
               type="button" 
               variant="outline" 
               onClick={() => {
-                // Combine current form data with saved data for printing
+                                // Combine current form data with saved data for printing
                 const allProcedures = [...procedures, ...savedProcedures];
                 const allMedications = [...internalMedications, ...savedMedications];
                 
                 const printData = {
                   patient_name: formData.patient_name,
                   uhid: patientUhId,
-                  op_no: formData.opd_no,
+                  opd_no: formData.opd_no,
                   age: formData.age,
                   ref: "",
                   gender: formData.gender,
@@ -2011,307 +2108,306 @@ export default function CaseSheetForm({ initialCaseSheet, patientUhId, opNo, doc
                   printWindow.document.write(`
                     <html>
                     <head>
-                      <title>Case Sheet - ${formData.patient_name}</title>
+                      <title>OPD COMPLETE CASE SUMMARY - ${formData.patient_name}</title>
                       <style>
                         body { 
-                            font-family: 'Times New Roman', serif; 
-                            background: #fff; 
-                            color: #000; 
+                          font-family: 'Times New Roman', serif; 
+                          background: #fff; 
+                          color: #000; 
                           margin: 0; 
                           padding: 20px; 
-                            font-size: 12pt;
-                            line-height: 1.4;
-                          }
-                          .container { 
-                            max-width: 800px; 
-                            margin: 0 auto; 
-                            padding: 20px;
+                          font-size: 12pt;
+                          line-height: 1.4;
+                        }
+                        .container { 
+                          max-width: 800px; 
+                          margin: 0 auto; 
+                          padding: 20px;
                         }
                         .header { 
-                            display: flex; 
-                            align-items: center; 
+                          display: flex; 
+                          align-items: center; 
                           margin-bottom: 30px; 
-                            border-bottom: 2px solid #333;
-                            padding-bottom: 20px;
+                          border-bottom: 2px solid #333;
+                          padding-bottom: 20px;
                         }
-                          .logo { 
+                        .logo { 
                           width: 80px;
                           height: 80px;
-                            margin-right: 20px;
-                          }
-                          .title { 
-                            flex: 1; 
-                            text-align: center; 
-                          }
-                          .title h1 {
-                            font-size: 18pt;
-                            font-weight: bold;
-                            margin: 0 0 5px 0;
-                            color: #000;
-                          }
-                          .title h2 {
-                            font-size: 16pt;
-                            font-weight: bold;
-                            margin: 0;
-                            color: #000;
-                          }
-                          .patient-info {
-                          display: flex;
-                            flex-wrap: wrap;
-                            gap: 40px;
-                            margin-bottom: 20px;
-                          }
-                          .patient-info div {
-                            display: flex;
-                            align-items: baseline;
+                          margin-right: 20px;
                         }
-                          .patient-info b {
+                        .title { 
+                          flex: 1; 
+                          text-align: center; 
+                        }
+                        .title h1 {
+                          font-size: 18pt;
                           font-weight: bold;
-                            margin-right: 5px;
+                          margin: 0 0 5px 0;
+                          color: #000;
                         }
-                          .patient-info .value {
-                            min-width: 150px;
-                            padding-bottom: 2px;
+                        .title h2 {
+                          font-size: 16pt;
+                          font-weight: bold;
+                          margin: 0;
+                          text-decoration: underline;
+                          color: #000;
+                        }
+                        .patient-info {
+                          display: flex;
+                          flex-wrap: wrap;
+                          gap: 40px;
+                          margin-bottom: 20px;
+                        }
+                        .patient-info div {
+                          display: flex;
+                          align-items: baseline;
+                        }
+                        .patient-info b {
+                          font-weight: bold;
+                          margin-right: 5px;
+                        }
+                        .patient-info .value {
+                          border-bottom: 1px solid #000;
+                          min-width: 150px;
+                          padding-bottom: 2px;
                         }
                         .section { 
-                            margin-bottom: 6px; 
+                          margin-bottom: 15px; 
                         }
-                          .section b { 
-                            font-weight: bold; 
-                            margin-bottom: 5px; 
-                            color: #000; 
-                            font-size: 12pt;
+                        .section b { 
+                          font-weight: bold; 
+                          margin-bottom: 5px; 
+                          color: #000; 
+                          font-size: 12pt;
                         }
-                          .section .value { 
-                            margin-left: 15px; 
-                            font-weight: normal; 
-                            white-space: pre-wrap; 
-                            word-break: break-word; 
-                            font-size: 12pt;
-                            padding-bottom: 2px;
-                            min-height: 15px;
-                          }
-                          .examination-section {
-                            margin-left: 15px;
-                        }
-                          .examination-section b {
-                            font-weight: bold;
-                            color: #000;
-                        }
-                          .examination-table {
-                            margin-left: 20px;
-                            margin-top: 5px;
-                        }
-                          .examination-table table {
-                            width: 100%;
-                            border-collapse: collapse;
-                        }
-                          .examination-table td {
-                            padding: 2px 10px;
-                            font-size: 12pt;
-                          }
-                          .examination-table b {
-                            font-weight: bold;
-                        }
-                          .examination-list {
+                        .section .value { 
                           margin-left: 20px; 
-                            margin-top: 5px;
+                          font-weight: normal; 
+                          white-space: pre-wrap; 
+                          word-break: break-word; 
+                          font-size: 12pt;
+                          border-bottom: 1px solid #ccc;
+                          padding-bottom: 2px;
+                          min-height: 20px;
                         }
-                          .examination-list ul {
-                            margin: 5px 0;
-                            padding-left: 20px;
-                          }
-                          .examination-list li {
-                            margin-bottom: 3px;
-                            font-size: 12pt;
-                          }
-                          .examination-list b {
-                            font-weight: bold;
-                          }
-                          .pain-scale {
-                            margin-top: 10px;
-                            text-align: center;
-                          }
-                          .pain-scale img {
-                            max-width: 400px;
-                            height: auto;
-                          }
-                          .procedures-section, .medications-section {
-                            margin-left: 20px;
-                            margin-top: 5px;
-                          }
-                          .procedure-item, .medication-item {
-                            margin-bottom: 5px;
-                            padding: 4px;
-                            border: 1px solid #ccc;
-                            border-radius: 2px;
-                            background-color: #f9f9f9;
+                        .examination-section {
+                          margin-left: 20px;
                         }
-                          .procedure-item b, .medication-item b {
-                            font-weight: bold;
-                            color: #000;
+                        .examination-section b {
+                          font-weight: bold;
+                          color: #000;
                         }
-                          hr { 
-                            margin: 20px 0; 
-                            border: none; 
-                            border-top: 1.5px solid #333; 
+                        .examination-table {
+                          margin-left: 20px;
+                          margin-top: 5px;
                         }
-                          .footer { 
-                            margin-top: 20px; 
-                          display: flex;
-                          justify-content: space-between;
+                        .examination-table table {
+                          width: 100%;
+                          border-collapse: collapse;
+                        }
+                        .examination-table td {
+                          padding: 2px 10px;
+                          font-size: 12pt;
+                        }
+                        .examination-table b {
+                          font-weight: bold;
+                        }
+                        .examination-list {
+                          margin-left: 20px;
+                          margin-top: 5px;
+                        }
+                        .examination-list ul {
+                          margin: 5px 0;
+                          padding-left: 20px;
+                        }
+                        .examination-list li {
+                          margin-bottom: 3px;
+                          font-size: 12pt;
+                        }
+                        .examination-list b {
+                          font-weight: bold;
+                        }
+                        .pain-scale {
+                          margin-top: 10px;
+                          text-align: center;
+                        }
+                        .pain-scale img {
+                          max-width: 400px;
+                          height: auto;
+                        }
+                        .procedures-section, .medications-section {
+                          margin-left: 20px;
+                          margin-top: 5px;
+                        }
+                        .procedure-item, .medication-item {
+                          margin-bottom: 10px;
+                          padding: 8px;
+                          border: 1px solid #ccc;
+                          border-radius: 4px;
+                          background-color: #f9f9f9;
+                        }
+                        .procedure-item b, .medication-item b {
+                          font-weight: bold;
+                          color: #000;
+                        }
+                        hr { 
+                          margin: 20px 0; 
+                          border: none; 
+                          border-top: 1.5px solid #333; 
+                        }
+                        .footer { 
+                          margin-top: 40px; 
+                          display: flex; 
+                          justify-content: space-between; 
                           border-top: 1px solid #333;
-                            padding-top: 10px;
-                            font-size: 12pt;
-                          }
-                          .page-number {
-                            text-align: right;
-                            margin-top: 20px;
-                            font-size: 10pt;
+                          padding-top: 20px;
+                          font-size: 12pt;
                         }
-                        @media print { 
-                            body { margin: 0; padding: 10px; }
-                            .container { border: none; }
+                        .page-number {
+                          text-align: right;
+                          margin-top: 20px;
+                          font-size: 10pt;
+                        }
+                        @media print {
+                          body { margin: 0; padding: 10px; }
+                          .container { border: none; }
                         }
                       </style>
                     </head>
                     <body>
-                        <div class="container">
-                          <!-- Page 1 -->
-                      <div class="header">
-                            <img src="/my-logo.png" alt="Logo" class="logo" />
-                            <div class="title">
-                              <h1>POORNIMA AYURVEDIC MEDICAL COLLEGE, HOSPITAL & RESEARCH CENTRE</h1>
-                              <h2>OPD SHEET</h2>
-                        </div>
-                      </div>
-                      
-                          <div class="patient-info">
-                            <div><b>Patient Name:</b><span class="value">${printData.patient_name || ''}</span></div>
-                            <div><b>UHID No:</b><span class="value">${printData.uhid || ''}</span></div>
-                      </div>
-                          <div class="patient-info">
-                            <div><b>Age:</b><span class="value">${printData.age || ''} yrs</span></div>
-                            <div><b>Ref:</b><span class="value"></span></div>
-                      </div>
-                          <div class="patient-info">
-                            <div><b>Gender:</b><span class="value">${printData.gender || ''}</span></div>
-                            <div><b>Contact No:</b><span class="value">${printData.contact || ''}</span></div>
+                      <div class="container">
+                        <!-- Page 1 -->
+                        <div class="header">
+                          <img src="/my-logo.png" alt="Logo" class="logo" />
+                          <div class="title">
+                            <h1>POORNIMA AYURVEDIC MEDICAL COLLEGE, HOSPITAL & RESEARCH CENTRE</h1>
+                            <h2>OPD COMPLETE CASE SUMMARY</h2>
                           </div>
-                          <div class="patient-info">
-                            <div><b>Address:</b><span class="value">${printData.address || ''}</span></div>
-                            <div><b>Doctor:</b><span class="value">${printData.doctor || ''}</span></div>
-                          </div>
-                          <div class="patient-info">
-                            <div><b>Department:</b><span class="value">${printData.department || ''}</span></div>
-                            <div><b>OP No:</b><span class="value">${printData.op_no || ''}</span></div>
                         </div>
                         
-                          <hr />
-                          
-                          <div class="section"><b>• Chief Complaints:</b><div class="value">${printData.chief_complaints || ''}</div></div>
-                          <div class="section"><b>• Associated Complaints:</b><div class="value">${printData.associated_complaints || ''}</div></div>
-                          <div class="section"><b>• Past History:</b><div class="value">${printData.past_history || ''}</div></div>
-                          <div class="section"><b>• Personal History:</b><div class="value">${printData.personal_history || ''}</div></div>
-                          <div class="section"><b>• Allergy History:</b><div class="value">${printData.allergy_history || ''}</div></div>
-                          <div class="section"><b>• Family History:</b><div class="value">${printData.family_history || ''}</div></div>
-                          <div class="section"><b>• Obs & Gyn History: (Applicable for female patients only)</b><div class="value">${printData.obs_gyn_history || ''}</div></div>
-                          
-                          <div class="section">
-                            <b>• Examination:</b>
-                            <div class="examination-section">
-                              <div class="examination-table">
-                                <b>• General Examination</b>
-                                <table>
-                                  <tr>
-                                    <td><b>Ht:</b> ${printData.height || ''}</td>
-                                    <td><b>Wt:</b> ${printData.weight || ''}</td>
-                                    <td><b>BMI:</b> ${printData.bmi || ''}</td>
-                                    <td><b>Pulse:</b> ${printData.pulse || ''}</td>
-                                    <td><b>RR:</b> ${printData.rr || ''}</td>
-                                    <td><b>BP:</b> ${printData.bp || ''}</td>
-                                  </tr>
-                                </table>
-                          </div>
-                              <div class="examination-list">
-                                <b>• Systemic Examination</b>
-                                <ul>
-                                  <li><b>Respiratory System-</b> ${printData.respiratory_system || ''}</li>
-                                  <li><b>CVS:</b> ${printData.cvs || ''}</li>
-                                  <li><b>CNS:</b> ${printData.cns || ''}</li>
-                                </ul>
-                          </div>
-                              <div class="examination-list">
-                                <b>• Local Examination</b>
-                                <div class="value">${printData.local_examination || ''}</div>
+                        <div class="patient-info">
+                          <div><b>Patient Name:</b><span class="value">${printData.patient_name || ''}</span></div>
+                          <div><b>UHID No:</b><span class="value">${printData.uhid || ''}</span></div>
+                        </div>
+                        <div class="patient-info">
+                          <div><b>Age:</b><span class="value">${printData.age || ''} yrs</span></div>
+                          <div><b>Gender:</b><span class="value">${printData.gender || ''}</span></div>
+                        </div>
+                        <div class="patient-info">
+                          <div><b>Contact No:</b><span class="value">${printData.contact || ''}</span></div>
+                          <div><b>Address:</b><span class="value">${printData.address || ''}</span></div>
+                        </div>
+                        <div class="patient-info">
+                          <div><b>Department:</b><span class="value">${printData.department || ''}</span></div>
+                          <div><b>OPD No:</b><span class="value">${printData.opd_no || ''}</span></div>
+                        </div>
+                        
+                        <hr />
+                        
+                        <div class="section"><b>• Chief Complaints:</b><div class="value">${printData.chief_complaints || ''}</div></div>
+                        <div class="section"><b>• Associated Complaints:</b><div class="value">${printData.associated_complaints || ''}</div></div>
+                        <div class="section"><b>• Past History:</b><div class="value">${printData.past_history || ''}</div></div>
+                        <div class="section"><b>• Personal History:</b><div class="value">${printData.personal_history || ''}</div></div>
+                        <div class="section"><b>• Allergy History:</b><div class="value">${printData.allergy_history || ''}</div></div>
+                        <div class="section"><b>• Family History:</b><div class="value">${printData.family_history || ''}</div></div>
+                        <div class="section"><b>• Obs & Gyn History: (Applicable for female patients only)</b><div class="value">${printData.obs_gyn_history || ''}</div></div>
+                        
+                        <div class="section">
+                          <b>• Examination:</b>
+                          <div class="examination-section">
+                            <div class="examination-table">
+                              <b>• General Examination</b>
+                              <table>
+                                <tr>
+                                  <td><b>Ht:</b> ${printData.height || ''}</td>
+                                  <td><b>Wt:</b> ${printData.weight || ''}</td>
+                                  <td><b>BMI:</b> ${printData.bmi || ''}</td>
+                                  <td><b>Pulse:</b> ${printData.pulse || ''}</td>
+                                  <td><b>RR:</b> ${printData.rr || ''}</td>
+                                  <td><b>BP:</b> ${printData.bp || ''}</td>
+                                </tr>
+                              </table>
+                            </div>
+                            <div class="examination-list">
+                              <b>• Systemic Examination</b>
+                              <ul>
+                                <li><b>Respiratory System:</b> ${printData.respiratory_system || ''}</li>
+                                <li><b>CVS:</b> ${printData.cvs || ''}</li>
+                                <li><b>CNS:</b> ${printData.cns || ''}</li>
+                              </ul>
+                            </div>
+                            <div class="examination-list">
+                              <b>• Local Examination</b>
+                              <div class="value">${printData.local_examination || ''}</div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      
-                      <div class="section">
-                            <b>• Pain Assessment (applicable only for pain predominant cases):</b>
-                            <div class="value">${printData.pain_assessment || ''}</div>
-                            <div class="pain-scale">
-                              <img src="/pain-scale.png" alt="Pain Scale" />
-                            </div>
-                      </div>
-                          
-                          <div class="section"><b>• Investigations (if any):</b><div class="value">${printData.investigations || ''}</div></div>
-                      
-                      <div class="section">
-                            <b>• Procedures:</b>
-                            <div class="procedures-section">
-                              ${printData.procedures.length > 0 ? printData.procedures.map(proc => `
+                        
+                        <div class="section">
+                          <b>• Pain Assessment (applicable only for pain predominant cases):</b>
+                          <div class="value">${printData.pain_assessment || ''}</div>
+                          <div class="pain-scale">
+                            <img src="/pain-scale.png" alt="Pain Scale" />
+                          </div>
+                        </div>
+                        
+                        <div class="section"><b>• Investigations (if any):</b><div class="value">${printData.investigations || ''}</div></div>
+                        
+                        <div class="section">
+                          <b>• Procedures:</b>
+                          <div class="procedures-section">
+                            ${printData.procedures.length > 0 ? printData.procedures.map(proc => `
                               <div class="procedure-item">
-                                  <b>${proc.procedure.procedure_name || 'Unknown Procedure'}</b><br>
-                                  ${proc.medicine ? `${proc.medicine.product_name}<br>` : ''}
-                                  ${proc.requirement ? `${proc.requirement.product_name}<br>` : ''}
+                                <b>${proc.procedure?.procedure_name || proc.procedure_name || 'Unknown Procedure'}</b><br>
+                                ${proc.medicine ? `${proc.medicine.product_name}<br>` : ''}
+                                ${proc.requirement ? `${proc.requirement.product_name}<br>` : ''}
                                 ${proc.quantity ? `Quantity: ${proc.quantity}<br>` : ''}
                                 ${proc.start_date ? `Start Date: ${proc.start_date}<br>` : ''}
                                 ${proc.end_date ? `End Date: ${proc.end_date}<br>` : ''}
                                 ${proc.therapist ? `Therapist: ${proc.therapist}` : ''}
                               </div>
-                              `).join('') : '<div class="value">No procedures added</div>'}
+                            `).join('') : '<div class="value">No procedures added</div>'}
                           </div>
-                      </div>
-                      
-                      <div class="section">
-                            <b>• Internal Medications:</b>
-                            <div class="medications-section">
-                              ${printData.internal_medications.length > 0 ? printData.internal_medications.map(med => `
+                        </div>
+                        
+                        <div class="section">
+                          <b>• Internal Medications:</b>
+                          <div class="medications-section">
+                            ${printData.internal_medications.length > 0 ? printData.internal_medications.map(med => `
                               <div class="medication-item">
-                                  <b>${med.medication.product_name || 'Unknown Medication'}</b><br>
+                                <b>${med.medication?.product_name || med.medication_name || 'Unknown Medication'}</b><br>
                                 ${med.dosage ? `Dosage: ${med.dosage}<br>` : ''}
                                 ${med.frequency ? `Frequency: ${med.frequency}<br>` : ''}
                                 ${med.start_date ? `Start Date: ${med.start_date}<br>` : ''}
                                 ${med.end_date ? `End Date: ${med.end_date}<br>` : ''}
                                 ${med.notes ? `Notes: ${med.notes}` : ''}
                               </div>
-                              `).join('') : '<div class="value">No medications added</div>'}
+                            `).join('') : '<div class="value">No medications added</div>'}
                           </div>
-                      </div>
-                      
-                          <div class="section"><b>• Provisional Diagnosis/Final Diagnosis:</b><div class="value">${printData.diagnosis || ''}</div></div>
-                      <div class="section">
-                            <b>• Screening for Nutritional Needs:</b>
-                            <div class="examination-section">
-                              <b>o Nutritional Status:</b> Normal/mild malnutrition/moderate malnutrition/severe malnutrition
-                              <div class="value">${printData.nutritional_status || ''}</div>
-                      </div>
+                        </div>
+                        
+                        <div class="section"><b>• Provisional Diagnosis/Final Diagnosis:</b><div class="value">${printData.diagnosis || ''}</div></div>
+                        <div class="section">
+                          <b>• Screening for Nutritional Needs:</b>
+                          <div class="examination-section">
+                            <b>o Nutritional Status:</b> Normal/mild malnutrition/moderate malnutrition/severe malnutrition
+                            <div class="value">${printData.nutritional_status || ''}</div>
                           </div>
-                          <div class="section"><b>• Treatment Plan/Care of Plan:</b><div class="value">${printData.treatment_plan || ''}</div></div>
-                          <div class="section"><b>• Preventive aspects Pathya Apathys Nidana Pariyarjana, (if any):</b><div class="value">${printData.preventive_aspects || ''}</div></div>
-                          <div class="section"><b>• Rehabilitation-Physiotherapy/Basayana Apunarbhay:</b><div class="value">${printData.rehabilitation || ''}</div></div>
-                          <div class="section"><b>• Desired outcome:</b><div class="value">${printData.desired_outcome || ''}</div></div>
-                          
-                          <div class="footer">
-                            <div>Date: ${new Date().toLocaleDateString()}</div>
-                            <div><b>Doctor Name, Signature with date & Time</b></div>
                         </div>
-                          
-                          <div class="page-number">Page 1 of 1</div>
+                        <div class="section"><b>• Treatment Plan/Care of Plan:</b><div class="value">${printData.treatment_plan || ''}</div></div>
+                        <div class="section"><b>• Preventive aspects Pathya Apathys Nidana Pariyarjana, (if any):</b><div class="value">${printData.preventive_aspects || ''}</div></div>
+                        <div class="section"><b>• Rehabilitation-Physiotherapy/Basayana Apunarbhay:</b><div class="value">${printData.rehabilitation || ''}</div></div>
+                        <div class="section"><b>• Desired outcome:</b><div class="value">${printData.desired_outcome || ''}</div></div>
+                        
+                        <div class="footer">
+                          <div>Date: ${new Date().toLocaleDateString()}</div>
+                          <div><b>Doctor Name, Signature with date & Time</b></div>
                         </div>
-                        <script>window.onload = function() { window.print(); window.close(); };</script>
+                        
+                        <div class="page-number">Page 1 of 1</div>
+                      </div>
+                      <script>window.onload = function() { window.print(); };</script>
                     </body>
                     </html>
                   `);

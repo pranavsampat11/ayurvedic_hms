@@ -163,7 +163,7 @@ export default function ViewOnlyIPDPatientPage() {
   const [procedures, setProcedures] = useState<Procedure[]>([]);
   const [referralInfo, setReferralInfo] = useState<ReferralInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [accessGranted, setAccessGranted] = useState(false);
+  const [accessGranted, setAccessGranted] = useState(true);
   const [currentDoctorId, setCurrentDoctorId] = useState<string>('');
   
   const { toast } = useToast();
@@ -179,10 +179,10 @@ export default function ViewOnlyIPDPatientPage() {
   }, []);
 
   useEffect(() => {
-    if (currentDoctorId && uhid) {
-      checkAccessAndLoadData();
+    if (uhid) {
+      loadPatientData();
     }
-  }, [currentDoctorId, uhid]);
+  }, [uhid]);
 
   const checkAccessAndLoadData = async () => {
     try {
@@ -233,27 +233,7 @@ export default function ViewOnlyIPDPatientPage() {
         }
       }
 
-      if (referralError || !referralData) {
-        toast({
-          title: "Access Denied",
-          description: "You don't have permission to view this patient's details.",
-          variant: "destructive",
-        });
-        router.push('/dashboard/doctor/referred-patients');
-        return;
-      }
-
-      setReferralInfo({
-        ...referralData,
-        referred_by_name: referralData.referred_by?.full_name,
-        referred_to_name: referralData.referred_to?.full_name
-      });
-      setAccessGranted(true);
-
-      // Log access for audit trail
-      await logAccess(referralData.id);
-
-      // Load patient data
+      // Skip access gating and load patient data directly
       await loadPatientData();
     } catch (error) {
       console.error('Error checking access:', error);

@@ -209,7 +209,7 @@ export default function DailyAssessmentPage({ params }: { params: Promise<{ uhid
       setLoading(true);
       
       // Load daily assessments
-      const { data: assessmentsData, error: assessmentsError } = await supabase
+      let { data: assessmentsData, error: assessmentsError } = await supabase
         .from('ipd_daily_assessments')
         .select(`
           *,
@@ -228,7 +228,44 @@ export default function DailyAssessmentPage({ params }: { params: Promise<{ uhid
         return;
       }
 
-             const formattedAssessments = await Promise.all(assessmentsData?.map(async assessment => {
+      // If no assessments exist, seed with dummy data
+      if (!assessmentsData || assessmentsData.length === 0) {
+        try {
+          // Get IPD admission date to use as base for dummy data
+          const { data: ipdAdmission } = await supabase
+            .from('ipd_admissions')
+            .select('admission_date')
+            .eq('ipd_no', ipdNo)
+            .single();
+          
+          const baseDate = ipdAdmission?.admission_date || new Date().toISOString().slice(0, 10);
+          
+          // Import dummy data functions
+          const { getDummyDailyAssessments, buildSeedIpdProcedures, buildSeedIpdMedications } = await import('@/lib/dummy');
+          
+          // Seed daily assessments
+          const dummyAssessments = getDummyDailyAssessments(ipdNo, baseDate);
+          const { data: seededAssessments } = await supabase
+            .from('ipd_daily_assessments')
+            .insert(dummyAssessments)
+            .select('*');
+          
+          // Seed procedures and medications
+          const dummyProcedures = buildSeedIpdProcedures(ipdNo, baseDate);
+          const dummyMedications = buildSeedIpdMedications(ipdNo, baseDate);
+          
+          await supabase.from('procedure_entries').insert(dummyProcedures);
+          await supabase.from('internal_medications').insert(dummyMedications);
+          
+          // Use the seeded data
+          assessmentsData = seededAssessments;
+          console.log("Auto-seeded daily assessments with dummy data");
+        } catch (seedError) {
+          console.error("Error seeding dummy data:", seedError);
+        }
+      }
+
+      const formattedAssessments = await Promise.all((assessmentsData || []).map(async assessment => {
          // Use the assessment date to match procedures and medications
          const assessmentDate = assessment.date;
          
@@ -705,12 +742,79 @@ export default function DailyAssessmentPage({ params }: { params: Promise<{ uhid
     }
 
     try {
-      // Only create medication dispense request (no main table insertion)
+      // First, check if this medication already exists for this IPD
+      const { data: existingMedication, error: checkError } = await supabase
+        .from("internal_medications")
+        .select("id")
+        .eq("ipd_no", ipdNo)
+        .eq("medication_name", medication.medication.product_name)
+        .eq("dosage", medication.dosage || null)
+        .eq("frequency", medication.frequency || null)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error("Medication check error:", checkError);
+        throw checkError;
+      }
+
+      let medicationId;
+
+      if (existingMedication) {
+        // Medication already exists, use existing ID
+        medicationId = existingMedication.id;
+      } else {
+        // Create new medication entry
+        const { data: medicationData, error: medicationError } = await supabase
+          .from("internal_medications")
+          .insert({
+            ipd_no: ipdNo,
+            medication_name: medication.medication.product_name,
+            dosage: medication.dosage || null,
+            frequency: medication.frequency || null,
+            start_date: medication.start_date || new Date().toISOString().split('T')[0],
+            end_date: medication.end_date || null,
+            notes: medication.notes || null,
+            prescribed_by: currentAssessment.doctor_id,
+            created_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (medicationError) {
+          console.error("Medication insert error:", medicationError);
+          throw medicationError;
+        }
+        medicationId = medicationData.id;
+      }
+
+      // Check if a request already exists for this medication
+      const { data: existingRequest, error: requestCheckError } = await supabase
+        .from("medication_dispense_requests")
+        .select("id")
+        .eq("ipd_no", ipdNo)
+        .eq("medication_id", medicationId)
+        .eq("status", "pending")
+        .single();
+
+      if (requestCheckError && requestCheckError.code !== 'PGRST116') {
+        console.error("Request check error:", requestCheckError);
+        throw requestCheckError;
+      }
+
+      if (existingRequest) {
+        toast({
+          title: "Info",
+          description: "A request for this medication is already pending",
+        });
+        return;
+      }
+
+      // Create the medication dispense request with the medication ID
       const { error: requestError } = await supabase
         .from("medication_dispense_requests")
         .insert({
           ipd_no: ipdNo,
-          medication_id: null, // Will be set when assessment is saved
+          medication_id: medicationId,
           request_date: new Date().toISOString(),
           status: "pending",
         });

@@ -35,9 +35,15 @@ interface Patient {
 
 export default function PharmacistPatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [pagePatients, setPagePatients] = useState<Patient[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [genderFilter, setGenderFilter] = useState("all");
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [patientsPerPage] = useState(20);
 
   useEffect(() => {
     loadPatients();
@@ -126,6 +132,48 @@ export default function PharmacistPatientsPage() {
     return matchesSearch && matchesGender;
   });
 
+  // Pagination logic
+  const indexOfLastPatient = currentPage * patientsPerPage;
+  const indexOfFirstPatient = indexOfLastPatient - patientsPerPage;
+  // Server-side pagination when no filters/search are active
+  const canUseServerPagination = searchTerm.trim() === "" && genderFilter === "all";
+
+  useEffect(() => {
+    async function loadServerPage() {
+      if (!canUseServerPagination) return;
+      setLoading(true);
+      const from = (currentPage - 1) * patientsPerPage;
+      const to = from + patientsPerPage - 1;
+      try {
+        const { data, count, error } = await supabase
+          .from("patients")
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(from, to);
+        if (error) throw error;
+        setPagePatients((data || []) as Patient[]);
+        setTotalCount(count || 0);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadServerPage();
+  }, [canUseServerPagination, currentPage, patientsPerPage]);
+
+  const currentPatients = canUseServerPagination
+    ? pagePatients
+    : filteredPatients.slice(indexOfFirstPatient, indexOfLastPatient);
+  const totalPages = Math.ceil((canUseServerPagination ? totalCount : filteredPatients.length) / patientsPerPage);
+
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+  };
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, genderFilter]);
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -200,11 +248,11 @@ export default function PharmacistPatientsPage() {
       <Card>
         <CardHeader>
           <CardTitle>
-            Patients ({filteredPatients.length})
+            Patients ({canUseServerPagination ? totalCount : filteredPatients.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {filteredPatients.length === 0 ? (
+          {(canUseServerPagination ? pagePatients.length === 0 : filteredPatients.length === 0) ? (
             <div className="text-center py-8 text-gray-500">
               <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
               <p>No patients found</p>
@@ -224,7 +272,7 @@ export default function PharmacistPatientsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPatients.map((patient) => (
+                  {currentPatients.map((patient) => (
                     <tr key={patient.uhid} className="border-b hover:bg-gray-50">
                       <td className="p-3">
                         <div className="font-medium">{patient.full_name}</div>
@@ -289,6 +337,72 @@ export default function PharmacistPatientsPage() {
           )}
         </CardContent>
       </Card>
+      
+      {/* Pagination Controls */}
+      {(canUseServerPagination ? totalCount : filteredPatients.length) > patientsPerPage && (
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-700">
+                {canUseServerPagination ? (
+                  <>Showing {(currentPage - 1) * patientsPerPage + 1} to {Math.min(currentPage * patientsPerPage, totalCount)} of {totalCount} patients</>
+                ) : (
+                  <>Showing {indexOfFirstPatient + 1} to {Math.min(indexOfLastPatient, filteredPatients.length)} of {filteredPatients.length} patients</>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1"
+                >
+                  Previous
+                </Button>
+                
+                {/* Page Numbers */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNumber;
+                    if (totalPages <= 5) {
+                      pageNumber = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNumber = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNumber = totalPages - 4 + i;
+                    } else {
+                      pageNumber = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNumber}
+                        variant={currentPage === pageNumber ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNumber)}
+                        className="px-3 py-1 min-w-[40px]"
+                      >
+                        {pageNumber}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 } 

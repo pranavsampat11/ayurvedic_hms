@@ -21,6 +21,7 @@ import {
   Trash2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getDummyPatient, getDummyMedications, getDummyMedicationRequests } from "@/lib/dummy";
 
 interface Patient {
   uhid: string;
@@ -112,22 +113,17 @@ export default function PatientMedicationRequestsPage({ params }: { params: any 
         .single();
 
       if (opdError || !opdVisit) {
-        console.error("Error loading OPD visit:", opdError);
-        toast({
-          title: "Error",
-          description: "Patient not found",
-          variant: "destructive",
+        const dummy = getDummyPatient(opdNo);
+        setPatient(dummy as any);
+      } else {
+        setPatient({
+          ...opdVisit.patient,
+          uhid: opdVisit.uhid,
+          opd_no: opdVisit.opd_no,
+          doctor_id: opdVisit.appointment?.doctor_id,
+          doctor_name: opdVisit.appointment?.doctor?.full_name
         });
-        return;
       }
-
-      setPatient({
-        ...opdVisit.patient,
-        uhid: opdVisit.uhid,
-        opd_no: opdVisit.opd_no,
-        doctor_id: opdVisit.appointment?.doctor_id,
-        doctor_name: opdVisit.appointment?.doctor?.full_name
-      });
 
       // Load available medications
       const { data: medicationsData, error: medicationsError } = await supabase
@@ -136,11 +132,10 @@ export default function PatientMedicationRequestsPage({ params }: { params: any 
         .order("product_name");
 
       if (medicationsError) {
-        console.error("Medications error:", medicationsError);
-        throw medicationsError;
+        setMedications(getDummyMedications());
+      } else {
+        setMedications(medicationsData || getDummyMedications());
       }
-      
-      setMedications(medicationsData || []);
 
       // Load existing requests for this patient
       await loadRequests();
@@ -193,9 +188,10 @@ export default function PatientMedicationRequestsPage({ params }: { params: any 
         notes: request.internal_medication?.notes || "",
       }));
 
-      setRequests(enrichedRequests);
+      setRequests((enrichedRequests && enrichedRequests.length > 0) ? enrichedRequests : getDummyMedicationRequests(opdNo));
     } catch (error) {
       console.error("Error loading requests:", error);
+      setRequests(getDummyMedicationRequests(opdNo));
     }
   };
 

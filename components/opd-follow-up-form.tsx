@@ -813,12 +813,57 @@ export default function OPDFollowUpForm({ onClose, onSave, initialData, initialO
     }
 
     try {
+      // First, check if this medication already exists for this OPD
+      const { data: existingMedication, error: checkError } = await supabase
+        .from("internal_medications")
+        .select("id")
+        .eq("opd_no", formData.opd_no)
+        .eq("medication_name", medication.medication.product_name)
+        .eq("dosage", medication.dosage || null)
+        .eq("frequency", medication.frequency || null)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error("Medication check error:", checkError);
+        throw checkError;
+      }
+
+      let medicationId;
+
+      if (existingMedication) {
+        // Medication already exists, use existing ID
+        medicationId = existingMedication.id;
+      } else {
+        // Create new medication entry
+        const { data: medicationData, error: medicationError } = await supabase
+          .from("internal_medications")
+          .insert({
+            opd_no: formData.opd_no,
+            medication_name: medication.medication.product_name,
+            dosage: medication.dosage || null,
+            frequency: medication.frequency || null,
+            start_date: medication.start_date || new Date().toISOString().split('T')[0],
+            end_date: medication.end_date || null,
+            notes: medication.notes || null,
+            prescribed_by: formData.doctor_id,
+            created_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (medicationError) {
+          console.error("Medication insert error:", medicationError);
+          throw medicationError;
+        }
+        medicationId = medicationData.id;
+      }
+
       // Check if a request already exists for this medication
       const { data: existingRequest, error: requestCheckError } = await supabase
         .from("medication_dispense_requests")
         .select("id")
         .eq("opd_no", formData.opd_no)
-        .eq("medication_name", medication.medication.product_name)
+        .eq("medication_id", medicationId)
         .eq("status", "pending")
         .single();
 
@@ -835,16 +880,12 @@ export default function OPDFollowUpForm({ onClose, onSave, initialData, initialO
         return;
       }
 
-      // Create the medication dispense request directly
+      // Create the medication dispense request with the medication ID
       const { error: requestError } = await supabase
         .from("medication_dispense_requests")
         .insert({
           opd_no: formData.opd_no,
-          medication_name: medication.medication.product_name,
-          dosage: medication.dosage || null,
-          frequency: medication.frequency || null,
-          notes: medication.notes || null,
-          requested_by: formData.doctor_id,
+          medication_id: medicationId,
           status: "pending",
         });
 

@@ -352,6 +352,7 @@ export const getNavigationLinks = (role: UserRole) => {
     receptionist: [
       { name: "IPD Requests", href: "/receptionist/ipd-requests", icon: Users, roles: ["receptionist"] },
       { name: "Billing", href: "/billing", icon: DollarSign, roles: ["receptionist"] },
+      { name: "Discharge Bill", href: "/receptionist/discharge-bill", icon: FileText, roles: ["receptionist"] },
     ],
     doctor: [
       { name: "Appointments", href: "/appointments", icon: CalendarIconLucide, roles: ["doctor"] },
@@ -373,6 +374,7 @@ export const getNavigationLinks = (role: UserRole) => {
       baseLinks[1], // Patients
       { name: "IPD Requests", href: "/receptionist/ipd-requests", icon: Users, roles: ["receptionist"] },
       { name: "Billing", href: "/billing", icon: DollarSign, roles: ["receptionist"] },
+      { name: "Discharge Bill", href: "/receptionist/discharge-bill", icon: FileText, roles: ["receptionist"] },
     ];
   }
 

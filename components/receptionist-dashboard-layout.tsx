@@ -5,13 +5,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  Stethoscope,
-  Users,
-  DollarSign,
-  LogOut,
-  X,
-  Menu,
-  ClipboardList,
+  	Stethoscope,
+	Users,
+	DollarSign,
+	LogOut,
+	X,
+	Menu,
+	ClipboardList,
+	Receipt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -39,11 +40,16 @@ const sidebarItems = [
     href: "/receptionist/ipd-requests",
     icon: ClipboardList,
   },
-  {
-    title: "Billing",
-    href: "/billing",
-    icon: DollarSign,
-  },
+  	{
+		title: "Billing",
+		href: "/billing",
+		icon: DollarSign,
+	},
+	{
+		title: "Discharge Bill",
+		href: "/receptionist/discharge-bill",
+		icon: Receipt,
+	},
 ];
 
 export default function ReceptionistDashboardLayout({ children, title }: ReceptionistDashboardLayoutProps) {

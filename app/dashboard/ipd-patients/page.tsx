@@ -20,6 +20,8 @@ export default function IPDPatientsPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
   const [filterStatus, setFilterStatus] = useState("");
   const [filterGender, setFilterGender] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   const doctorId = typeof window !== 'undefined' ? localStorage.getItem("userId") : null
   const router = useRouter();
@@ -53,7 +55,7 @@ export default function IPDPatientsPage() {
 
   const filtered = patients
     .filter(p => {
-      if (!search && !filterStatus && !filterGender) return true;
+      if (!search && !filterStatus && !filterGender && !fromDate && !toDate) return true;
       const s = search.toLowerCase();
       const matchesSearch =
         p.patient?.full_name?.toLowerCase().includes(s) ||
@@ -63,7 +65,9 @@ export default function IPDPatientsPage() {
         p.admission_reason?.toLowerCase().includes(s);
       const matchesStatus = !filterStatus || p.status === filterStatus;
       const matchesGender = !filterGender || p.patient?.gender === filterGender;
-      return matchesSearch && matchesStatus && matchesGender;
+      const matchesFrom = !fromDate || new Date(p.admission_date) >= new Date(fromDate);
+      const matchesTo = !toDate || new Date(p.admission_date) <= new Date(new Date(toDate).setHours(23,59,59,999));
+      return matchesSearch && matchesStatus && matchesGender && matchesFrom && matchesTo;
     })
     .sort((a, b) => {
       let aVal, bVal;
@@ -119,6 +123,24 @@ export default function IPDPatientsPage() {
             onChange={e => setSearch(e.target.value)}
             className="max-w-xs"
           />
+          <div className="flex flex-col">
+            <label className="text-xs mb-1">From</label>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={e => setFromDate(e.target.value)}
+              className="border rounded px-2 py-1"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-xs mb-1">To</label>
+            <input
+              type="date"
+              value={toDate}
+              onChange={e => setToDate(e.target.value)}
+              className="border rounded px-2 py-1"
+            />
+          </div>
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="border rounded px-2 py-1">
             <option value="">All Status</option>
             <option value="admitted">Admitted</option>
@@ -131,6 +153,13 @@ export default function IPDPatientsPage() {
             <option value="Female">Female</option>
             <option value="Other">Other</option>
           </select>
+          <Button
+            variant="outline"
+            onClick={() => { setSearch(""); setFromDate(""); setToDate(""); setFilterStatus(""); setFilterGender(""); }}
+            className="text-sm"
+          >
+            Clear Filters
+          </Button>
 
         </div>
         {loading ? <div>Loading...</div> : (

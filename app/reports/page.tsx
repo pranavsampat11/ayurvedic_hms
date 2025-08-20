@@ -98,6 +98,25 @@ export default function ReportsPage() {
     )
   }, [patientTableSearchTerm])
 
+  // Pagination state for patients table
+  const [currentPatientsPage, setCurrentPatientsPage] = useState(1);
+  const [patientsPerPage] = useState(20);
+
+  // Pagination logic for patients
+  const indexOfLastPatient = currentPatientsPage * patientsPerPage;
+  const indexOfFirstPatient = indexOfLastPatient - patientsPerPage;
+  const currentPatients = filteredPatients.slice(indexOfFirstPatient, indexOfLastPatient);
+  const totalPatientsPages = Math.ceil(filteredPatients.length / patientsPerPage);
+
+  const handlePatientsPageChange = (pageNumber: number) => {
+    setCurrentPatientsPage(pageNumber);
+  };
+
+  // Reset to first page when search changes
+  useEffect(() => {
+    setCurrentPatientsPage(1);
+  }, [patientTableSearchTerm]);
+
   const filteredBeds = useMemo(() => {
     const allBeds = getBeds()
     if (!bedTableSearchTerm) return allBeds
@@ -110,6 +129,25 @@ export default function ReportsPage() {
         bed.id.toLowerCase().includes(lowerCaseSearchTerm),
     )
   }, [bedTableSearchTerm])
+
+  // Pagination state for beds table
+  const [currentBedsPage, setCurrentBedsPage] = useState(1);
+  const [bedsPerPage] = useState(20);
+
+  // Pagination logic for beds
+  const indexOfLastBed = currentBedsPage * bedsPerPage;
+  const indexOfFirstBed = indexOfLastBed - bedsPerPage;
+  const currentBeds = filteredBeds.slice(indexOfFirstBed, indexOfLastBed);
+  const totalBedsPages = Math.ceil(filteredBeds.length / bedsPerPage);
+
+  const handleBedsPageChange = (pageNumber: number) => {
+    setCurrentBedsPage(pageNumber);
+  };
+
+  // Reset to first page when search changes
+  useEffect(() => {
+    setCurrentBedsPage(1);
+  }, [bedTableSearchTerm]);
 
   const navLinks = getNavigationLinks(currentRole || "admin")
 
@@ -382,14 +420,14 @@ export default function ReportsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredPatients.length === 0 ? (
+                        {currentPatients.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={7} className="h-24 text-center">
                               No patients found.
                             </TableCell>
                           </TableRow>
                         ) : (
-                          filteredPatients.map((patient) => (
+                          currentPatients.map((patient) => (
                             <TableRow key={patient.uhid}>
                               <TableCell className="font-mono">{patient.uhid}</TableCell>
                               <TableCell>
@@ -408,6 +446,64 @@ export default function ReportsPage() {
                       </TableBody>
                     </Table>
                   </div>
+                  
+                  {/* Pagination Controls for Patients */}
+                  {filteredPatients.length > patientsPerPage && (
+                    <div className="flex items-center justify-between mt-4 px-4 pb-4">
+                      <div className="text-sm text-gray-700">
+                        Showing {indexOfFirstPatient + 1} to {Math.min(indexOfLastPatient, filteredPatients.length)} of {filteredPatients.length} patients
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePatientsPageChange(currentPatientsPage - 1)}
+                          disabled={currentPatientsPage === 1}
+                          className="px-3 py-1"
+                        >
+                          Previous
+                        </Button>
+                        
+                        {/* Page Numbers */}
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.min(5, totalPatientsPages) }, (_, i) => {
+                            let pageNumber;
+                            if (totalPatientsPages <= 5) {
+                              pageNumber = i + 1;
+                            } else if (currentPatientsPage <= 3) {
+                              pageNumber = i + 1;
+                            } else if (currentPatientsPage >= totalPatientsPages - 2) {
+                              pageNumber = totalPatientsPages - 4 + i;
+                            } else {
+                              pageNumber = currentPatientsPage - 2 + i;
+                            }
+                            
+                            return (
+                              <Button
+                                key={pageNumber}
+                                variant={currentPatientsPage === pageNumber ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => handlePatientsPageChange(pageNumber)}
+                                className="px-3 py-1 min-w-[40px]"
+                              >
+                                {pageNumber}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePatientsPageChange(currentPatientsPage + 1)}
+                          disabled={currentPatientsPage === totalPatientsPages}
+                          className="px-3 py-1"
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -440,14 +536,14 @@ export default function ReportsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredBeds.length === 0 ? (
+                        {currentBeds.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={6} className="h-24 text-center">
                               No beds found.
                             </TableCell>
                           </TableRow>
                         ) : (
-                          filteredBeds.map((bed) => (
+                          currentBeds.map((bed) => (
                             <TableRow key={bed.id}>
                               <TableCell className="font-mono">{bed.id}</TableCell>
                               <TableCell>{bed.roomNumber}</TableCell>
@@ -461,6 +557,64 @@ export default function ReportsPage() {
                       </TableBody>
                     </Table>
                   </div>
+                  
+                  {/* Pagination Controls for Beds */}
+                  {filteredBeds.length > bedsPerPage && (
+                    <div className="flex items-center justify-between mt-4 px-4 pb-4">
+                      <div className="text-sm text-gray-700">
+                        Showing {indexOfFirstBed + 1} to {Math.min(indexOfLastBed, filteredBeds.length)} of {filteredBeds.length} beds
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleBedsPageChange(currentBedsPage - 1)}
+                          disabled={currentBedsPage === 1}
+                          className="px-3 py-1"
+                        >
+                          Previous
+                        </Button>
+                        
+                        {/* Page Numbers */}
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: Math.min(5, totalBedsPages) }, (_, i) => {
+                            let pageNumber;
+                            if (totalBedsPages <= 5) {
+                              pageNumber = i + 1;
+                            } else if (currentBedsPage <= 3) {
+                              pageNumber = i + 1;
+                            } else if (currentBedsPage >= totalBedsPages - 2) {
+                              pageNumber = totalBedsPages - 4 + i;
+                            } else {
+                              pageNumber = currentBedsPage - 2 + i;
+                            }
+                            
+                            return (
+                              <Button
+                                key={pageNumber}
+                                variant={currentBedsPage === pageNumber ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => handleBedsPageChange(pageNumber)}
+                                className="px-3 py-1 min-w-[40px]"
+                              >
+                                {pageNumber}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleBedsPageChange(currentBedsPage + 1)}
+                          disabled={currentBedsPage === totalBedsPages}
+                          className="px-3 py-1"
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

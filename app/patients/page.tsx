@@ -93,6 +93,10 @@ export default function PatientsPage() {
   const [allPatients, setAllPatients] = useState<any[]>([])
   const [availableBeds, setAvailableBeds] = useState<any[]>([])
   const [doctorIdToName, setDoctorIdToName] = useState<Record<string, string>>({});
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [patientsPerPage] = useState(5); // TEMP: smaller page size for testing pagination
 
   useEffect(() => {
     async function fetchPatients() {
@@ -157,6 +161,21 @@ export default function PatientsPage() {
     }
     return patients
   }, [allPatients, searchTerm, filterType, filterDepartment, filterSubDepartment, filterGender, filterStatus, filterFromDate, filterToDate])
+
+  // Pagination logic
+  const indexOfLastPatient = currentPage * patientsPerPage;
+  const indexOfFirstPatient = indexOfLastPatient - patientsPerPage;
+  const currentPatients = filteredPatients.slice(indexOfFirstPatient, indexOfLastPatient);
+  const totalPages = Math.ceil(filteredPatients.length / patientsPerPage);
+
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+  };
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterType, filterDepartment, filterSubDepartment, filterGender, filterStatus, filterFromDate, filterToDate]);
 
   const navLinks = getNavigationLinks(currentRole || "admin")
 
@@ -669,14 +688,14 @@ export default function PatientsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredPatients.length === 0 ? (
+                    {currentPatients.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={9} className="h-24 text-center">
                           No patients found matching your criteria.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredPatients.map((patient) => (
+                      currentPatients.map((patient) => (
                         <TableRow key={patient.uhid}>
                           <TableCell className="font-mono">{patient.uhid}</TableCell>
                           <TableCell>
@@ -742,6 +761,68 @@ export default function PatientsPage() {
               </div>
             </CardContent>
           </Card>
+          
+          {/* Pagination Controls */}
+          {filteredPatients.length > patientsPerPage && (
+            <Card className="mt-4">
+              <CardContent className="pt-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-700">
+                    Showing {indexOfFirstPatient + 1} to {Math.min(indexOfLastPatient, filteredPatients.length)} of {filteredPatients.length} patients
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1"
+                    >
+                      Previous
+                    </Button>
+                    
+                    {/* Page Numbers */}
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNumber;
+                        if (totalPages <= 5) {
+                          pageNumber = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNumber = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNumber = totalPages - 4 + i;
+                        } else {
+                          pageNumber = currentPage - 2 + i;
+                        }
+                        
+                        return (
+                          <Button
+                            key={pageNumber}
+                            variant={currentPage === pageNumber ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handlePageChange(pageNumber)}
+                            className="px-3 py-1 min-w-[40px]"
+                          >
+                            {pageNumber}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </main>
       </div>
 

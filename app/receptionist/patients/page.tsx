@@ -86,8 +86,14 @@ export default function ReceptionistPatientsPage() {
   const [filterToDate, setFilterToDate] = useState<Date | undefined>(undefined)
 
   const [allPatients, setAllPatients] = useState<any[]>([])
+  const [pagePatients, setPagePatients] = useState<any[]>([])
+  const [totalCount, setTotalCount] = useState<number>(0)
   const [availableBeds, setAvailableBeds] = useState<any[]>([]) // Disabled - beds table doesn't exist
   const [doctorIdToName, setDoctorIdToName] = useState<Record<string, string>>({});
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [patientsPerPage] = useState(20);
 
   useEffect(() => {
     async function fetchPatients() {
@@ -96,6 +102,35 @@ export default function ReceptionistPatientsPage() {
     }
     fetchPatients()
   }, [])
+
+  // Server-side pagination when no filters/search are active
+  const canUseServerPagination =
+    searchTerm.trim() === "" &&
+    filterType === "All" &&
+    filterDepartment === "All" &&
+    filterSubDepartment === "All" &&
+    filterGender === "All" &&
+    filterStatus === "All" &&
+    !filterFromDate &&
+    !filterToDate
+
+  useEffect(() => {
+    async function loadServerPage() {
+      if (!canUseServerPagination) return
+      const from = (currentPage - 1) * patientsPerPage
+      const to = from + patientsPerPage - 1
+      const { data, count, error } = await supabase
+        .from("patients")
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(from, to)
+      if (!error) {
+        setPagePatients(data || [])
+        setTotalCount(count || 0)
+      }
+    }
+    loadServerPage()
+  }, [canUseServerPagination, currentPage, patientsPerPage])
 
   // useEffect(() => {
   //   async function fetchAvailableBeds() {
@@ -166,8 +201,67 @@ export default function ReceptionistPatientsPage() {
   };
 
   const handlePrintBill = () => {
-    // Implementation for printing bill
-    console.log("Printing bill...")
+    if (!billPatient) return;
+    const logoUrl = window.location.origin + "/my-logo.png";
+    const billHtml = `
+      <html>
+        <head>
+          <title>Patient Bill - ${billPatient.full_name}</title>
+          <style>
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none !important; }
+            }
+            body { font-family: 'Times New Roman', serif; background: #fff; color: #000; }
+            .a4 { width: 210mm; min-height: 297mm; padding: 32px 24px; margin: 0 auto; background: #fff; box-sizing: border-box; }
+            .bill-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
+            .bill-logo { height: 64px; }
+            .bill-title { text-align: right; }
+            .bill-title .main { font-size: 2rem; font-weight: bold; }
+            .bill-title .sub { font-size: 1rem; color: #666; }
+            .bill-details { margin-bottom: 24px; }
+            .bill-details b { font-weight: bold; }
+            .bill-table { width: 100%; margin-top: 24px; border-collapse: collapse; }
+            .bill-table td { padding: 8px 0; font-size: 1.1rem; }
+            .bill-table .label { text-align: left; }
+            .bill-table .value { text-align: right; }
+            .bill-total { font-size: 1.3rem; font-weight: bold; border-top: 2px solid #000; margin-top: 12px; padding-top: 8px; }
+          </style>
+        </head>
+        <body>
+          <div class="a4">
+            <div class="bill-header">
+              <img src="${logoUrl}" alt="Logo" class="bill-logo" />
+              <div class="bill-title">
+                <div class="main">Ayurvedic Hospital</div>
+                <div class="sub">Patient Bill</div>
+              </div>
+            </div>
+            <div class="bill-details">
+              <div><b>Patient Name:</b> ${billPatient.full_name}</div>
+              <div><b>UHID:</b> ${billPatient.uhid}</div>
+              <div><b>Type:</b> ${billPatient.patient_type}</div>
+              <div><b>Department:</b> ${billPatient.department || '-'}</div>
+              <div><b>Sub Department:</b> ${billPatient.sub_department || '-'}</div>
+              <div><b>Contact:</b> ${billPatient.mobile}</div>
+              <div><b>Address:</b> ${billPatient.address || '-'}</div>
+              <div><b>Date:</b> ${new Date().toLocaleDateString()}</div>
+            </div>
+            <table class="bill-table">
+              <tr><td class="label">Registration Fee</td><td class="value">₹500.00</td></tr>
+              <tr><td class="label">Consultation Fee</td><td class="value">₹200.00</td></tr>
+            </table>
+            <div class="bill-total">Total: ₹700.00</div>
+          </div>
+          <script>window.onload = function() { window.print(); window.close(); }</script>
+        </body>
+      </html>
+    `;
+    const printWindow = window.open("", "_blank", "width=900,height=1200");
+    if (printWindow) {
+      printWindow.document.write(billHtml);
+      printWindow.document.close();
+    }
   }
 
   const handleBillReady = async (patient: any) => {
@@ -217,6 +311,23 @@ export default function ReceptionistPatientsPage() {
       return matchesSearch && matchesType && matchesDepartment && matchesSubDepartment && matchesGender && matchesStatus && matchesDate
     })
   }, [allPatients, searchTerm, filterType, filterDepartment, filterSubDepartment, filterGender, filterStatus, filterFromDate, filterToDate])
+
+  // Pagination logic
+  const indexOfLastPatient = currentPage * patientsPerPage;
+  const indexOfFirstPatient = indexOfLastPatient - patientsPerPage;
+  const currentPatients = canUseServerPagination
+    ? pagePatients
+    : filteredPatients.slice(indexOfFirstPatient, indexOfLastPatient);
+  const totalPages = Math.ceil((canUseServerPagination ? totalCount : filteredPatients.length) / patientsPerPage);
+
+  const handlePageChange = (pageNumber: number) => {
+    setCurrentPage(pageNumber);
+  };
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterType, filterDepartment, filterSubDepartment, filterGender, filterStatus, filterFromDate, filterToDate]);
 
   return (
     <div className="space-y-6">
@@ -393,7 +504,7 @@ export default function ReceptionistPatientsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPatients.length === 0 ? (
+                  {currentPatients.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={9} className="text-center py-12">
                         <div className="text-slate-500">
@@ -404,7 +515,7 @@ export default function ReceptionistPatientsPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredPatients.map((patient) => (
+                    currentPatients.map((patient) => (
                       <TableRow key={patient.uhid} className="hover:bg-slate-50">
                         <TableCell className="font-mono text-blue-600">{patient.uhid}</TableCell>
                         <TableCell className="font-semibold text-slate-800">{patient.full_name}</TableCell>
@@ -452,7 +563,7 @@ export default function ReceptionistPatientsPage() {
 
             {/* Mobile Cards */}
             <div className="lg:hidden">
-              {filteredPatients.length === 0 ? (
+              {currentPatients.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="text-slate-500">
                     <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
@@ -462,7 +573,7 @@ export default function ReceptionistPatientsPage() {
                 </div>
               ) : (
                 <div className="space-y-4 p-4">
-                  {filteredPatients.map((patient) => (
+                  {currentPatients.map((patient) => (
                     <Card key={patient.uhid} className="bg-white border-slate-200 shadow-sm">
                       <CardContent className="p-4">
                         <div className="space-y-3">
@@ -520,6 +631,72 @@ export default function ReceptionistPatientsPage() {
           </div>
         </CardContent>
       </Card>
+      
+      {/* Pagination Controls */}
+      {(canUseServerPagination ? totalCount : filteredPatients.length) > patientsPerPage && (
+        <Card className="mt-4">
+          <CardContent className="pt-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-700">
+                {canUseServerPagination ? (
+                  <>Showing {(currentPage - 1) * patientsPerPage + 1} to {Math.min(currentPage * patientsPerPage, totalCount)} of {totalCount} patients</>
+                ) : (
+                  <>Showing {indexOfFirstPatient + 1} to {Math.min(indexOfLastPatient, filteredPatients.length)} of {filteredPatients.length} patients</>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1"
+                >
+                  Previous
+                </Button>
+                
+                {/* Page Numbers */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNumber;
+                    if (totalPages <= 5) {
+                      pageNumber = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNumber = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNumber = totalPages - 4 + i;
+                    } else {
+                      pageNumber = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNumber}
+                        variant={currentPage === pageNumber ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNumber)}
+                        className="px-3 py-1 min-w-[40px]"
+                      >
+                        {pageNumber}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Patient Registration Modal */}
       <Dialog open={isRegistrationModalOpen} onOpenChange={setIsRegistrationModalOpen}>
@@ -608,6 +785,9 @@ export default function ReceptionistPatientsPage() {
             </Button>
             <Button onClick={() => handleBillReady(billPatient)} className="bg-blue-600 hover:bg-blue-700">
               Generate Bill
+            </Button>
+            <Button onClick={handlePrintBill} variant="outline" className="border-slate-200">
+              Print Bill
             </Button>
           </div>
         </BillDialogContent>

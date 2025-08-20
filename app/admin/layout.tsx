@@ -83,27 +83,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Main Content */}
       <div className="flex flex-col flex-1 overflow-hidden">
-        {/* Mobile Header */}
-        <header className="md:hidden flex h-14 items-center gap-4 border-b bg-white px-4 shadow-sm">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-          <div className="flex-1">
-            <h1 className="text-lg font-semibold">Admin Panel</h1>
-            <p className="text-xs text-muted-foreground">Ayurvedic HMS</p>
-          </div>
-        </header>
-
-        {/* Desktop Header */}
-        <header className="hidden md:flex h-16 items-center px-6 border-b bg-white/80">
-          <h1 className="text-2xl font-bold">Admin Panel</h1>
-        </header>
-        
-        <main className="flex-1 p-4 md:p-6 bg-gray-50 overflow-auto">
+        <main className="flex-1 bg-gray-50 overflow-auto">
           {children}
         </main>
       </div>

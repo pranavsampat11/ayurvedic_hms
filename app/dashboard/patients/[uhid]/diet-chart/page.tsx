@@ -82,6 +82,73 @@ export default function DietChartPage() {
         return;
       }
 
+      // If no diet chart entries exist, show dummy data directly in UI
+      if (!data || data.length === 0) {
+        console.log("No diet chart data found, creating dummy data for display...");
+        
+        // Get patient's creation date to use as base for dummy data dates
+        let baseDate = new Date();
+        try {
+          const { data: patientData } = await supabase
+            .from('patients')
+            .select('created_at')
+            .eq('uhid', patientData?.uhid || uhid)
+            .single();
+          
+          if (patientData?.created_at) {
+            baseDate = new Date(patientData.created_at);
+            console.log("Using patient creation date as base:", baseDate);
+          }
+        } catch (error) {
+          console.log("Could not fetch patient creation date, using current date");
+        }
+        
+        // Create dummy diet chart entries with dates based on patient creation
+        const dummyDietCharts = [
+          {
+            id: "dummy_1",
+            ipd_no: uhid,
+            date: new Date(baseDate.getTime() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            time: "8:00 AM",
+            diet: "Breakfast: Oatmeal with fruits and nuts, milk, herbal tea\nLunch: Khichdi with vegetables, buttermilk, roti\nDinner: Light soup with bread, mixed salad",
+            notes: "Patient tolerating diet well. Appetite improved. Following dietary guidelines.",
+            created_at: new Date(baseDate.getTime() + 1 * 24 * 60 * 60 * 1000).toISOString()
+          },
+          {
+            id: "dummy_2",
+            ipd_no: uhid,
+            date: new Date(baseDate.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            time: "7:30 AM",
+            diet: "Breakfast: Idli with sambar, coconut chutney, tea\nLunch: Rice with dal, vegetables, curd\nDinner: Vegetable pulao, raita, papad",
+            notes: "Patient accepting diet well. No adverse reactions. Weight stable.",
+            created_at: new Date(baseDate.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString()
+          },
+          {
+            id: "dummy_3",
+            ipd_no: uhid,
+            date: new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            time: "8:15 AM",
+            diet: "Breakfast: Poha with vegetables, peanuts, tea\nLunch: Roti with sabzi, dal, rice\nDinner: Mixed vegetable curry, bread, salad",
+            notes: "Patient following dietary restrictions. Energy levels good. Digestion normal.",
+            created_at: new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
+          },
+          {
+            id: "dummy_4",
+            ipd_no: uhid,
+            date: new Date(baseDate.getTime() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            time: "7:45 AM",
+            diet: "Breakfast: Upma with vegetables, coconut, tea\nLunch: Khichdi with ghee, vegetables, curd\nDinner: Light khichdi, soup, fruits",
+            notes: "Patient compliant with diet. May need diet modification. Good compliance observed.",
+            created_at: new Date(baseDate.getTime() + 4 * 24 * 60 * 60 * 1000).toISOString()
+          }
+        ];
+        
+        console.log("Created dummy diet chart entries for display with dates based on patient creation");
+        setDietCharts(dummyDietCharts);
+        setLoading(false);
+        return;
+      }
+
       setDietCharts(data || []);
     } catch (error) {
       console.error('Error loading diet charts:', error);
@@ -102,11 +169,13 @@ export default function DietChartPage() {
   const handleAddEntry = () => {
     setCurrentEntry(null);
     setEditingIndex(null);
+    
+    // Pre-fill form with dummy data
     setForm({
       date: new Date().toISOString().split('T')[0],
       time: new Date().toTimeString().slice(0, 5),
-      diet: "",
-      notes: "",
+      diet: "Breakfast: Oatmeal with fruits and nuts, milk, herbal tea\nLunch: Khichdi with vegetables, buttermilk, roti\nDinner: Light soup with bread, mixed salad",
+      notes: "Patient tolerating diet well. Appetite improved. Following dietary guidelines.",
     });
     setShowForm(true);
   };

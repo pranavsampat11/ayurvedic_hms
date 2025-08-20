@@ -39,8 +39,14 @@ export function SignInForm() {
       localStorage.setItem("userName", data.full_name)
         
       // Route based on role
-      if (data.role === "pharmacist") {
+      if (data.role === "admin") {
+        router.push("/admin/dashboard")
+      } else if (data.role === "pharmacist") {
         router.push("/pharmacist/dashboard")
+      } else if (data.role === "therapist") {
+        router.push("/therapist/dashboard")
+      } else if (data.role === "nurse") {
+        router.push("/nurse/patients")
       } else {
         router.push("/dashboard")
       }

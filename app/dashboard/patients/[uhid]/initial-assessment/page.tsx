@@ -4,6 +4,7 @@ import React from "react";
 import CaseSheetForm from "@/components/case-sheet-form";
 import IpdCaseSheetForm from "@/components/ipd-case-sheet-form";
 import { supabase } from "@/lib/supabaseClient";
+import { getDummyPatient, getDummyOpdCaseSheet } from "@/lib/dummy";
 import { toast } from "@/hooks/use-toast";
 
 export default function InitialAssessmentPage({ params }: { params: any }) {
@@ -45,7 +46,23 @@ export default function InitialAssessmentPage({ params }: { params: any }) {
           .limit(1)
           .single();
         
-        setCaseSheet(opdCaseSheet || null);
+        // If no real case sheet, seed a dummy but preserve real header fields (doctor/patient/department)
+        if (opdCaseSheet) {
+          setCaseSheet(opdCaseSheet);
+        } else {
+          const dummy = getDummyOpdCaseSheet(patientId);
+          setCaseSheet({
+            ...dummy,
+            patient_name: opdVisit.patient?.full_name ?? dummy.patient_name,
+            age: opdVisit.patient?.age ?? dummy.age,
+            gender: opdVisit.patient?.gender ?? dummy.gender,
+            contact: opdVisit.patient?.mobile ?? dummy.contact,
+            address: opdVisit.patient?.address ?? dummy.address,
+            doctor: opdVisit.appointment?.doctor?.full_name ?? dummy.doctor,
+            doctor_id: opdVisit.appointment?.doctor_id ?? null,
+            department: (opdVisit.appointment as any)?.department ?? dummy.department,
+          } as any);
+        }
       } else {
         // Try to find as IPD admission
         const { data: ipdAdmission, error: ipdError } = await supabase
@@ -79,10 +96,28 @@ export default function InitialAssessmentPage({ params }: { params: any }) {
             .limit(1)
             .single();
           
-          setCaseSheet(ipdCaseSheet || null);
+          if (ipdCaseSheet) {
+            setCaseSheet(ipdCaseSheet);
+          } else {
+            const dummy = getDummyOpdCaseSheet(ipdAdmission.opd_no || "OPD-00000000-0001");
+            setCaseSheet({
+              ...dummy,
+              patient_name: ipdAdmission.patient?.full_name ?? dummy.patient_name,
+              age: ipdAdmission.patient?.age ?? dummy.age,
+              gender: ipdAdmission.patient?.gender ?? dummy.gender,
+              contact: ipdAdmission.patient?.mobile ?? dummy.contact,
+              address: ipdAdmission.patient?.address ?? dummy.address,
+              doctor: ipdAdmission.doctor?.full_name ?? dummy.doctor,
+              doctor_id: ipdAdmission.doctor_id ?? null,
+              department: (ipdAdmission as any)?.department ?? dummy.department,
+            } as any);
+          }
         } else {
-          // Neither OPD nor IPD found
-          setPatient(null);
+          // Neither OPD nor IPD found → show dummy patient and case sheet
+          const dummy = getDummyPatient(patientId);
+          setIsIpd(!patientId.startsWith("OPD-"));
+          setPatient(dummy);
+          setCaseSheet(getDummyOpdCaseSheet(dummy.opd_no || "OPD-00000000-0001"));
         }
       }
       

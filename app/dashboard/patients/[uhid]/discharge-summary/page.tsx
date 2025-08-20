@@ -5,10 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabaseClient";
 import { useParams } from "next/navigation";
 import { toast } from "@/hooks/use-toast";
-import { Edit, Plus, Trash2, Printer, Save } from "lucide-react";
+import { Edit, Plus, Trash2, Printer, Save, Calculator, Receipt } from "lucide-react";
+import Link from "next/link";
 
 interface DischargeSummary {
   id?: number;
@@ -45,6 +47,23 @@ interface DischargeSummary {
   created_at?: string;
 }
 
+interface BillCharges {
+  diet_charges_per_day: number;
+  doctor_charges_per_day: number;
+  nursing_charges_per_day: number;
+  room_type: 'AC' | 'Non-AC';
+}
+
+interface BillCalculation {
+  total_days: number;
+  bed_charges: number;
+  procedure_charges: number;
+  diet_charges: number;
+  doctor_charges: number;
+  nursing_charges: number;
+  total_amount: number;
+}
+
 export default function DischargeSummaryPage() {
   const params = useParams();
   const uhid = params.uhid as string;
@@ -55,6 +74,14 @@ export default function DischargeSummaryPage() {
   const [patientData, setPatientData] = useState<any>(null);
   const [procedures, setProcedures] = useState<any[]>([]);
   const [medications, setMedications] = useState<any[]>([]);
+  const [billCharges, setBillCharges] = useState<BillCharges>({
+    diet_charges_per_day: 0,
+    doctor_charges_per_day: 0,
+    nursing_charges_per_day: 0,
+    room_type: 'Non-AC'
+  });
+  const [billCalculation, setBillCalculation] = useState<BillCalculation | null>(null);
+  const [showBillModal, setShowBillModal] = useState(false);
   
   const [form, setForm] = useState({
     department: "",
@@ -572,6 +599,262 @@ export default function DischargeSummaryPage() {
     }
   };
 
+  const calculateBill = async () => {
+    if (!form.date_of_admission || !form.date_of_discharge) {
+      toast({
+        title: "Error",
+        description: "Please fill in admission and discharge dates first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Calculate total days
+      const admissionDate = new Date(form.date_of_admission);
+      const dischargeDate = new Date(form.date_of_discharge);
+      const totalDays = Math.ceil((dischargeDate.getTime() - admissionDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+      // Calculate bed charges
+      const bedRate = billCharges.room_type === 'AC' ? 750 : 500;
+      const bedCharges = totalDays * bedRate;
+
+      // Calculate procedure charges
+      let procedureCharges = 0;
+      for (const procedure of procedures) {
+        const startDate = new Date(procedure.start_date);
+        const endDate = new Date(procedure.end_date);
+        const procedureDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        
+        // Get procedure charges from database
+        const { data: procedureData } = await supabase
+          .from('procedures')
+          .select('charges_per_day')
+          .eq('procedure_name', procedure.procedure_name)
+          .single();
+        
+        if (procedureData && procedureData.charges_per_day) {
+          const dailyCharge = parseFloat(procedureData.charges_per_day);
+          procedureCharges += procedureDays * dailyCharge;
+        }
+      }
+
+      // Calculate other charges
+      const dietCharges = totalDays * billCharges.diet_charges_per_day;
+      const doctorCharges = totalDays * billCharges.doctor_charges_per_day;
+      const nursingCharges = totalDays * billCharges.nursing_charges_per_day;
+
+      const totalAmount = bedCharges + procedureCharges + dietCharges + doctorCharges + nursingCharges;
+
+      setBillCalculation({
+        total_days: totalDays,
+        bed_charges: bedCharges,
+        procedure_charges: procedureCharges,
+        diet_charges: dietCharges,
+        doctor_charges: doctorCharges,
+        nursing_charges: nursingCharges,
+        total_amount: totalAmount
+      });
+
+      setShowBillModal(true);
+    } catch (error) {
+      console.error('Error calculating bill:', error);
+      toast({
+        title: "Error",
+        description: "Failed to calculate bill. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const printBill = () => {
+    if (!billCalculation) return;
+    
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Final Bill - ${form.patient_name}</title>
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 20px; 
+              line-height: 1.6;
+              color: #333;
+            }
+            .container { 
+              max-width: 800px; 
+              margin: 0 auto; 
+              border: 2px solid #333; 
+              padding: 20px; 
+            }
+            .header { 
+              text-align: center; 
+              margin-bottom: 30px; 
+              border-bottom: 2px solid #333; 
+              padding-bottom: 20px; 
+            }
+            .logo { 
+              width: 80px; 
+              height: 80px; 
+              margin-bottom: 10px; 
+            }
+            .title h1 { 
+              margin: 0; 
+              font-size: 18pt; 
+              font-weight: bold; 
+              color: #2E7D32; 
+            }
+            .title h2 { 
+              margin: 5px 0; 
+              font-size: 16pt; 
+              font-weight: bold; 
+              color: #333; 
+            }
+            .patient-info { 
+              display: grid; 
+              grid-template-columns: 1fr 1fr; 
+              gap: 10px; 
+              margin-bottom: 20px; 
+              font-size: 12pt; 
+            }
+            .patient-info div { 
+              display: flex; 
+              justify-content: space-between; 
+              border-bottom: 1px solid #eee; 
+              padding: 2px 0; 
+            }
+            .patient-info b { 
+              font-weight: bold; 
+              min-width: 120px; 
+            }
+            .value { 
+              font-weight: normal; 
+              text-align: right; 
+              word-break: break-word; 
+            }
+            .bill-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 20px 0;
+              font-size: 12pt;
+            }
+            .bill-table th, .bill-table td {
+              border: 1px solid #333;
+              padding: 8px;
+              text-align: left;
+            }
+            .bill-table th {
+              background-color: #f0f0f0;
+              font-weight: bold;
+            }
+            .bill-table .total-row {
+              font-weight: bold;
+              background-color: #e8f5e8;
+            }
+            .total-amount {
+              text-align: center;
+              margin-top: 30px;
+              font-size: 16pt;
+              font-weight: bold;
+              color: #2E7D32;
+              border: 2px solid #2E7D32;
+              padding: 15px;
+              background-color: #f0f8f0;
+            }
+            @media print {
+              body { margin: 0; padding: 10px; }
+              .container { border: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <img src="/my-logo.png" alt="Logo" class="logo" />
+              <div class="title">
+                <h1>POORNIMA AYURVEDIC MEDICAL COLLEGE, HOSPITAL & RESEARCH CENTRE</h1>
+                <h2>FINAL BILL</h2>
+              </div>
+            </div>
+            
+            <div class="patient-info">
+              <div><b>Patient Name:</b><span class="value">${form.patient_name}</span></div>
+              <div><b>IP No:</b><span class="value">${form.ip_no}</span></div>
+              <div><b>UHID No:</b><span class="value">${form.uhid_no}</span></div>
+              <div><b>Ward/Bed No:</b><span class="value">${form.ward_bed_no}</span></div>
+              <div><b>Date of Admission:</b><span class="value">${form.date_of_admission}</span></div>
+              <div><b>Date of Discharge:</b><span class="value">${form.date_of_discharge}</span></div>
+              <div><b>Total Days:</b><span class="value">${billCalculation.total_days}</span></div>
+              <div><b>Room Type:</b><span class="value">${billCharges.room_type}</span></div>
+            </div>
+            
+            <table class="bill-table">
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th>Days</th>
+                  <th>Rate per Day</th>
+                  <th>Amount (₹)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Bed Charges (${billCharges.room_type})</td>
+                  <td>${billCalculation.total_days}</td>
+                  <td>₹${billCharges.room_type === 'AC' ? '750' : '500'}</td>
+                  <td>₹${billCalculation.bed_charges.toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>Procedure Charges</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>₹${billCalculation.procedure_charges.toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>Diet Charges</td>
+                  <td>${billCalculation.total_days}</td>
+                  <td>₹${billCharges.diet_charges_per_day}</td>
+                  <td>₹${billCalculation.diet_charges.toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>Doctor Charges</td>
+                  <td>${billCalculation.total_days}</td>
+                  <td>₹${billCharges.doctor_charges_per_day}</td>
+                  <td>₹${billCalculation.doctor_charges.toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>Nursing Charges</td>
+                  <td>${billCalculation.total_days}</td>
+                  <td>₹${billCharges.nursing_charges_per_day}</td>
+                  <td>₹${billCalculation.nursing_charges.toLocaleString()}</td>
+                </tr>
+                <tr class="total-row">
+                  <td colspan="3"><strong>TOTAL AMOUNT</strong></td>
+                  <td><strong>₹${billCalculation.total_amount.toLocaleString()}</strong></td>
+                </tr>
+              </tbody>
+            </table>
+            
+            <div class="total-amount">
+              Total Amount: ₹${billCalculation.total_amount.toLocaleString()}
+            </div>
+            
+            <div style="margin-top: 40px; text-align: center; font-size: 12pt;">
+              <p><strong>Authorized Signature:</strong></p>
+              <div style="border-top: 1px solid #333; width: 200px; margin: 20px auto;"></div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -598,6 +881,12 @@ export default function DischargeSummaryPage() {
             <Printer className="h-4 w-4 mr-2" />
             Print Summary
           </Button>
+          <Link href={`/dashboard/patients/${uhid}/final-bill`}>
+            <Button variant="outline">
+              <Calculator className="h-4 w-4 mr-2" />
+              Generate Final Bill
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -1000,6 +1289,135 @@ export default function DischargeSummaryPage() {
           </form>
         </CardContent>
       </Card>
+
+      {/* Bill Generation Modal */}
+      <Dialog open={showBillModal} onOpenChange={setShowBillModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calculator className="h-5 w-5" />
+              Generate Final Bill
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Charges Input Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Daily Charges Configuration</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="room_type">Room Type</Label>
+                    <select
+                      id="room_type"
+                      value={billCharges.room_type}
+                      onChange={(e) => setBillCharges(prev => ({ ...prev, room_type: e.target.value as 'AC' | 'Non-AC' }))}
+                      className="w-full p-2 border rounded-md"
+                    >
+                      <option value="Non-AC">Non-AC (₹500/day)</option>
+                      <option value="AC">AC (₹750/day)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="diet_charges">Diet Charges per Day (₹)</Label>
+                    <Input
+                      id="diet_charges"
+                      type="number"
+                      value={billCharges.diet_charges_per_day}
+                      onChange={(e) => setBillCharges(prev => ({ ...prev, diet_charges_per_day: parseFloat(e.target.value) || 0 }))}
+                      placeholder="Enter daily diet charges"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="doctor_charges">Doctor Charges per Day (₹)</Label>
+                    <Input
+                      id="doctor_charges"
+                      type="number"
+                      value={billCharges.doctor_charges_per_day}
+                      onChange={(e) => setBillCharges(prev => ({ ...prev, doctor_charges_per_day: parseFloat(e.target.value) || 0 }))}
+                      placeholder="Enter daily doctor charges"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="nursing_charges">Nursing Charges per Day (₹)</Label>
+                    <Input
+                      id="nursing_charges"
+                      type="number"
+                      value={billCharges.nursing_charges_per_day}
+                      onChange={(e) => setBillCharges(prev => ({ ...prev, nursing_charges_per_day: parseFloat(e.target.value) || 0 }))}
+                      placeholder="Enter daily nursing charges"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Bill Calculation Display */}
+            {billCalculation && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Receipt className="h-5 w-5" />
+                    Bill Calculation
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div><strong>Total Days:</strong> {billCalculation.total_days}</div>
+                      <div><strong>Room Type:</strong> {billCharges.room_type}</div>
+                    </div>
+                    
+                    <div className="border rounded-lg p-4 space-y-3">
+                      <div className="flex justify-between">
+                        <span>Bed Charges ({billCharges.room_type}):</span>
+                        <span>₹{billCalculation.bed_charges.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Procedure Charges:</span>
+                        <span>₹{billCalculation.procedure_charges.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Diet Charges:</span>
+                        <span>₹{billCalculation.diet_charges.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Doctor Charges:</span>
+                        <span>₹{billCalculation.doctor_charges.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Nursing Charges:</span>
+                        <span>₹{billCalculation.nursing_charges.toLocaleString()}</span>
+                      </div>
+                      <hr />
+                      <div className="flex justify-between text-lg font-bold text-green-600">
+                        <span>TOTAL AMOUNT:</span>
+                        <span>₹{billCalculation.total_amount.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-2">
+              <Button onClick={calculateBill} variant="outline">
+                <Calculator className="h-4 w-4 mr-2" />
+                Calculate Bill
+              </Button>
+              {billCalculation && (
+                <Button onClick={printBill} variant="outline">
+                  <Printer className="h-4 w-4 mr-2" />
+                  Print Bill
+                </Button>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 
