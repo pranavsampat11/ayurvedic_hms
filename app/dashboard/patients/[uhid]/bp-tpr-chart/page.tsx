@@ -124,84 +124,7 @@ export default function BPTPRChartPage() {
         return;
       }
 
-      // If no BP-TPR chart entries exist, show dummy data directly in UI
-      if (!data || data.length === 0) {
-        console.log("No BP-TPR chart data found, creating dummy data for display...");
-        
-        // Get patient's creation date to use as base for dummy data dates
-        let baseDate = new Date();
-        try {
-          const { data: patientData } = await supabase
-            .from('patients')
-            .select('created_at')
-            .eq('uhid', patientData?.uhid || uhid)
-            .single();
-          
-          if (patientData?.created_at) {
-            baseDate = new Date(patientData.created_at);
-            console.log("Using patient creation date as base:", baseDate);
-          }
-        } catch (error) {
-          console.log("Could not fetch patient creation date, using current date");
-        }
-        
-        // Create dummy BP-TPR chart entries with dates based on patient creation
-        const dummyBpTprCharts = [
-          {
-            id: "dummy_1",
-            ipd_no: uhid,
-            date_time: new Date(baseDate.getTime() + 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day after creation
-            temperature: 37.2,
-            pulse: 78,
-            respiratory_rate: 18,
-            bp: "120/80",
-            nurse_id: defaultNurseId || "nurse_001",
-            created_at: new Date(baseDate.getTime() + 1 * 24 * 60 * 60 * 1000).toISOString(),
-            staff: { full_name: "Nurse Staff Member" }
-          },
-          {
-            id: "dummy_2",
-            ipd_no: uhid,
-            date_time: new Date(baseDate.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days after creation
-            temperature: 36.8,
-            pulse: 72,
-            respiratory_rate: 16,
-            bp: "118/76",
-            nurse_id: defaultNurseId || "nurse_001",
-            created_at: new Date(baseDate.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-            staff: { full_name: "Nurse Staff Member" }
-          },
-          {
-            id: "dummy_3",
-            ipd_no: uhid,
-            date_time: new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days after creation
-            temperature: 37.0,
-            pulse: 75,
-            respiratory_rate: 17,
-            bp: "122/82",
-            nurse_id: defaultNurseId || "nurse_001",
-            created_at: new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-            staff: { full_name: "Nurse Staff Member" }
-          },
-          {
-            id: "dummy_4",
-            ipd_no: uhid,
-            date_time: new Date(baseDate.getTime() + 4 * 24 * 60 * 60 * 1000).toISOString(), // 4 days after creation
-            temperature: 36.9,
-            pulse: 70,
-            respiratory_rate: 15,
-            bp: "115/75",
-            nurse_id: defaultNurseId || "nurse_001",
-            created_at: new Date(baseDate.getTime() + 4 * 24 * 60 * 60 * 1000).toISOString(),
-            staff: { full_name: "Nurse Staff Member" }
-          }
-        ];
-        
-        console.log("Created dummy BP-TPR chart entries for display with dates based on patient creation");
-        setBpTprCharts(dummyBpTprCharts);
-        setLoading(false);
-        return;
-      }
+      // No dummy fallback; rely on real data only
 
       setBpTprCharts(data || []);
     } catch (error) {
@@ -224,15 +147,8 @@ export default function BPTPRChartPage() {
     setCurrentEntry(null);
     setEditingIndex(null);
     
-    // Pre-fill form with dummy data
-    setForm({
-      date: new Date().toISOString().split('T')[0],
-      time: new Date().toTimeString().slice(0, 5),
-      temperature: "37.1",
-      pulse: "76",
-      respiratoryRate: "17",
-      bp: "120/80",
-    });
+    // Open empty form; no dummy prefill
+    setForm({ date: "", time: "", temperature: "", pulse: "", respiratoryRate: "", bp: "" });
     setShowForm(true);
   };
 

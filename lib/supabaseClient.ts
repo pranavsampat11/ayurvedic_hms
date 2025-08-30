@@ -1,11 +1,2 @@
 import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-
-if (!supabaseUrl || !supabaseAnonKey) {
-	// Helps diagnose missing env on deploy without crashing build
-	console.warn('Supabase env vars missing: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY')
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient('https://yzmqdruerraecaoblrwv.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6bXFkcnVlcnJhZWNhb2Jscnd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMwMDgyNTAsImV4cCI6MjA2ODU4NDI1MH0.LOTwbDHzAJ3nVBNm1VNOyOWSbS9CfDhx36wseO3KbBo')

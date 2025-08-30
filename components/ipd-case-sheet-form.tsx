@@ -13,18 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, ChevronRight, Plus, X, Edit, Trash2 } from "lucide-react";
 import PrintableIpdCaseSheet from "./printable-ipd-case-sheet";
-import { 
-  getDummyIpdCaseSheet, 
-  getDummyDailyAssessments, 
-  getDummyPainAssessments, 
-  getDummyBpTprCharts, 
-  getDummyDietSheets, 
-  getDummyMedicationAdministrationCharts,
-  buildSeedIpdProcedures,
-  buildSeedIpdMedications,
-  getDummyProcedures,
-  getDummyMedications
-} from "@/lib/dummy";
+// Removed dummy data imports
 
 interface IpdCaseSheetFormProps {
   initialCaseSheet?: any;
@@ -308,133 +297,9 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
   );
   const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
 
-  // Function to seed all IPD dashboard sections with dummy data
+  // Function removed: seeding with dummy data no longer used
   const seedAllIpdSections = async () => {
-    if (!ipdNo) return;
-    
-    try {
-      let baseISO = initialCaseSheet?.created_at ? new Date(initialCaseSheet.created_at).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
-      
-      // Seed case sheet if it doesn't exist
-      if (!initialCaseSheet) {
-        const dummyCaseSheet = getDummyIpdCaseSheet(ipdNo);
-        const { data: insertedCaseSheet, error: insertError } = await supabase
-          .from("ipd_case_sheets")
-          .insert({
-            ...dummyCaseSheet,
-            ipd_no: ipdNo,
-            uhid: patientUhId,
-            doctor_id: doctorId,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .select()
-          .single();
-        
-        if (insertedCaseSheet && !insertError) {
-          console.log("Seeded IPD case sheet");
-          // Update the form data with the seeded case sheet
-          setFormData(prev => ({
-            ...prev,
-            ...insertedCaseSheet
-          }));
-        }
-      }
-      
-      // Seed daily assessments
-      const { data: existingDailyAssessments } = await supabase
-        .from("ipd_daily_assessments")
-        .select("id")
-        .eq("ipd_no", ipdNo);
-      
-      if (!existingDailyAssessments || existingDailyAssessments.length === 0) {
-        const dailyAssessments = getDummyDailyAssessments(ipdNo, baseISO);
-        await supabase.from("ipd_daily_assessments").insert(dailyAssessments);
-        console.log("Seeded daily assessments");
-      }
-      
-      // Seed pain assessments
-      const { data: existingPainAssessments } = await supabase
-        .from("pain_assessments")
-        .select("id")
-        .eq("ipd_no", ipdNo);
-      
-      if (!existingPainAssessments || existingPainAssessments.length === 0) {
-        const painAssessments = getDummyPainAssessments(ipdNo, baseISO);
-        await supabase.from("pain_assessments").insert(painAssessments);
-        console.log("Seeded pain assessments");
-      }
-      
-      // Seed BP/TPR charts
-      const { data: existingBpTpr } = await supabase
-        .from("bp_tpr_charts")
-        .select("id")
-        .eq("ipd_no", ipdNo);
-      
-      if (!existingBpTpr || existingBpTpr.length === 0) {
-        const bpTprCharts = getDummyBpTprCharts(ipdNo, baseISO);
-        await supabase.from("bp_tpr_charts").insert(bpTprCharts);
-        console.log("Seeded BP/TPR charts");
-      }
-      
-      // Seed diet sheets
-      const { data: existingDietSheets } = await supabase
-        .from("diet_sheets")
-        .select("id")
-        .eq("ipd_no", ipdNo);
-      
-      if (!existingDietSheets || existingDietSheets.length === 0) {
-        const dietSheets = getDummyDietSheets(ipdNo, baseISO);
-        await supabase.from("diet_sheets").insert(dietSheets);
-        console.log("Seeded diet sheets");
-      }
-      
-      // Seed medication administration charts
-      const { data: existingMedAdmin } = await supabase
-        .from("medication_administration_charts")
-        .select("id")
-        .eq("ipd_no", ipdNo);
-      
-      if (!existingMedAdmin || existingMedAdmin.length === 0) {
-        const medAdminCharts = getDummyMedicationAdministrationCharts(ipdNo, baseISO);
-        await supabase.from("medication_administration_charts").insert(medAdminCharts);
-        console.log("Seeded medication administration charts");
-      }
-      
-      // Seed discharge summary
-      const { data: existingDischargeSummary } = await supabase
-        .from("discharge_summaries")
-        .select("id")
-        .eq("ipd_no", ipdNo);
-      
-      if (!existingDischargeSummary || existingDischargeSummary.length === 0) {
-        const dischargeSummary = {
-          ipd_no: ipdNo,
-          date_of_discharge: new Date().toISOString().slice(0, 10),
-          discharge_diagnosis: "Lumbar disc herniation L4-L5 with left L5 radiculopathy",
-          treatment_given: "Conservative management with Panchakarma therapy, pain management",
-          condition_on_discharge: "Improved",
-          advice_on_discharge: "Continue medications, follow-up in 2 weeks, avoid heavy lifting",
-          created_at: new Date().toISOString(),
-        };
-        await supabase.from("discharge_summaries").insert(dischargeSummary);
-        console.log("Seeded discharge summary");
-      }
-      
-      toast({
-        title: "Success",
-        description: "All IPD sections seeded with dummy data",
-        variant: "default",
-      });
-      
-    } catch (error) {
-      console.error("Error seeding IPD sections:", error);
-      toast({
-        title: "Error",
-        description: "Failed to seed some IPD sections",
-        variant: "destructive",
-      });
-    }
+    // no-op
   };
 
   useEffect(() => {
@@ -536,35 +401,7 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
         }
       }
       
-      // If no case sheet exists, seed a basic one
-      if (ipdNo && !initialCaseSheet) {
-        try {
-          const dummyCaseSheet = getDummyIpdCaseSheet(ipdNo);
-          const { data: insertedCaseSheet, error: insertError } = await supabase
-            .from("ipd_case_sheets")
-            .insert({
-              ...dummyCaseSheet,
-              ipd_no: ipdNo,
-              uhid: patientUhId,
-              doctor_id: doctorId,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-          
-          if (insertedCaseSheet && !insertError) {
-            console.log("Seeded basic IPD case sheet");
-            // Update the form data with the seeded case sheet
-            setFormData(prev => ({
-              ...prev,
-              ...insertedCaseSheet
-            }));
-          }
-        } catch (error) {
-          console.error("Error seeding IPD case sheet:", error);
-        }
-      }
+      // Removed basic case sheet seeding
     };
 
     fetchPatientAndDoctorDetails();
@@ -606,18 +443,7 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
         console.log("Procedures data:", proceduresData, "Error:", proceduresError);
         console.log("IPD No being searched:", ipdNo);
         
-        // If no procedures exist, seed dummy data
-        if ((!proceduresData || proceduresData.length === 0) && ipdNo) {
-          try {
-            let baseISO = initialCaseSheet?.created_at ? new Date(initialCaseSheet.created_at).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
-            const seed = buildSeedIpdProcedures(ipdNo, baseISO);
-            await supabase.from("procedure_entries").insert(seed);
-            const { data: seeded } = await supabase.from("procedure_entries").select("*").eq("ipd_no", ipdNo);
-            proceduresData = seeded || [];
-          } catch (e) { 
-            console.warn("Seeding IPD procedures failed, using dummy overlay only", e); 
-          }
-        }
+        // No auto-seeding procedures
         
         if (proceduresData && proceduresData.length > 0) {
           const formattedProcedures = proceduresData.map(proc => {
@@ -659,18 +485,7 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
         let { data: medicationsData, error: medicationsError } = await medicationsQuery;
         console.log("Medications data:", medicationsData, "Error:", medicationsError);
         
-        // If no medications exist, seed dummy data
-        if ((!medicationsData || medicationsData.length === 0) && ipdNo) {
-          try {
-            let baseISO = initialCaseSheet?.created_at ? new Date(initialCaseSheet.created_at).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
-            const seed = buildSeedIpdMedications(ipdNo, baseISO);
-            await supabase.from("internal_medications").insert(seed);
-            const { data: seeded } = await supabase.from("internal_medications").select("*").eq("ipd_no", ipdNo);
-            medicationsData = seeded || [];
-          } catch (e) { 
-            console.warn("Seeding IPD medications failed, using dummy overlay only", e); 
-          }
-        }
+        // No auto-seeding medications
         
         if (medicationsData && medicationsData.length > 0) {
           const formattedMedications = medicationsData.map(med => ({
@@ -694,106 +509,7 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
     loadSavedData();
   }, [ipdNo, initialCaseSheet]);
 
-  // Auto-seed other IPD sections if they don't exist
-  useEffect(() => {
-    const seedOtherIpdSections = async () => {
-      if (!ipdNo) return;
-      
-      try {
-        let baseISO = initialCaseSheet?.created_at ? new Date(initialCaseSheet.created_at).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
-        
-        // Check and seed daily assessments
-        const { data: existingDailyAssessments } = await supabase
-          .from("ipd_daily_assessments")
-          .select("id")
-          .eq("ipd_no", ipdNo);
-        
-        if (!existingDailyAssessments || existingDailyAssessments.length === 0) {
-          const dailyAssessments = getDummyDailyAssessments(ipdNo, baseISO);
-          await supabase.from("ipd_daily_assessments").insert(dailyAssessments);
-          console.log("Auto-seeded daily assessments");
-        }
-        
-        // Check and seed pain assessments
-        const { data: existingPainAssessments } = await supabase
-          .from("pain_assessments")
-          .select("id")
-          .eq("ipd_no", ipdNo);
-        
-        if (!existingPainAssessments || existingPainAssessments.length === 0) {
-          const painAssessments = getDummyPainAssessments(ipdNo, baseISO);
-          await supabase.from("pain_assessments").insert(painAssessments);
-          console.log("Auto-seeded pain assessments");
-        }
-        
-        // Check and seed BP/TPR charts
-        const { data: existingBpTpr } = await supabase
-          .from("bp_tpr_charts")
-          .select("id")
-          .eq("ipd_no", ipdNo);
-        
-        if (!existingBpTpr || existingBpTpr.length === 0) {
-          const bpTprCharts = getDummyBpTprCharts(ipdNo, baseISO);
-          await supabase.from("bp_tpr_charts").insert(bpTprCharts);
-          console.log("Auto-seeded BP/TPR charts");
-        }
-        
-        // Check and seed diet sheets
-        const { data: existingDietSheets } = await supabase
-          .from("diet_sheets")
-          .select("id")
-          .eq("ipd_no", ipdNo);
-        
-        if (!existingDietSheets || existingDietSheets.length === 0) {
-          const dietSheets = getDummyDietSheets(ipdNo, baseISO);
-          await supabase.from("diet_sheets").insert(dietSheets);
-          console.log("Auto-seeded diet sheets");
-        }
-        
-        // Check and seed medication administration charts
-        const { data: existingMedAdmin } = await supabase
-          .from("medication_administration_charts")
-          .select("id")
-          .eq("ipd_no", ipdNo);
-        
-        if (!existingMedAdmin || existingMedAdmin.length === 0) {
-          const medAdminCharts = getDummyMedicationAdministrationCharts(ipdNo, baseISO);
-          await supabase.from("medication_administration_charts").insert(medAdminCharts);
-          console.log("Auto-seeded medication administration charts");
-        }
-        
-        // Check and seed discharge summary
-        const { data: existingDischargeSummary } = await supabase
-          .from("discharge_summaries")
-          .select("id")
-          .eq("ipd_no", ipdNo);
-        
-        if (!existingDischargeSummary || existingDischargeSummary.length === 0) {
-          const dischargeSummary = {
-            ipd_no: ipdNo,
-            date_of_discharge: new Date().toISOString().slice(0, 10),
-            discharge_diagnosis: "Lumbar disc herniation L4-L5 with left L5 radiculopathy",
-            treatment_given: "Conservative management with Panchakarma therapy, pain management",
-            condition_on_discharge: "Improved",
-            advice_on_discharge: "Continue medications, follow-up in 2 weeks, avoid heavy lifting",
-            created_at: new Date().toISOString(),
-          };
-          await supabase.from("discharge_summaries").insert(dischargeSummary);
-          console.log("Auto-seeded discharge summary");
-        }
-        
-      } catch (error) {
-        console.error("Error auto-seeding IPD sections:", error);
-      }
-    };
-    
-    // Add a small delay to ensure initial data is loaded first
-    const timer = setTimeout(() => {
-      seedOtherIpdSections();
-    }, 1000);
-    
-    return () => clearTimeout(timer);
-  }, [ipdNo, initialCaseSheet]);
+  // Removed auto-seed of IPD sections; rely on real data onlyq
 
   // Pre-fill form with dummy data if fields are empty
   useEffect(() => {
@@ -801,43 +517,7 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
       const hasEmptyFields = !formData.present_complaints || !formData.height || !formData.weight || !formData.pulse || !formData.bp;
       
       if (hasEmptyFields) {
-        const dummyData = getDummyIpdCaseSheet(ipdNo);
-        
-        setFormData(prev => ({
-          ...prev,
-          present_complaints: prev.present_complaints || dummyData.present_complaints,
-          associated_complaints: prev.associated_complaints || dummyData.associated_complaints,
-          past_history: prev.past_history || dummyData.past_history,
-          personal_history: prev.personal_history || dummyData.personal_history,
-          obs_gyn_history: prev.obs_gyn_history || dummyData.obs_gyn_history,
-          previous_medicine_history: prev.previous_medicine_history || dummyData.previous_medicine_history,
-          family_history: prev.family_history || dummyData.family_history,
-          height: prev.height || dummyData.height,
-          weight: prev.weight || dummyData.weight,
-          bmi: prev.bmi || dummyData.bmi,
-          pulse: prev.pulse || dummyData.pulse,
-          rr: prev.rr || dummyData.rr,
-          bp: prev.bp || dummyData.bp,
-          respiratory_system: prev.respiratory_system || dummyData.respiratory_system,
-          cvs: prev.cvs || dummyData.cvs,
-          cns: prev.cns || dummyData.cns,
-          local_examination: prev.local_examination || dummyData.local_examination,
-          sampraptighataka: prev.sampraptighataka || dummyData.sampraptighataka,
-          pain_assessment: prev.pain_assessment || dummyData.pain_assessment,
-          investigations: prev.investigations || dummyData.investigations,
-          diagnosis: prev.diagnosis || dummyData.diagnosis,
-          nutritional_status: prev.nutritional_status || dummyData.nutritional_status,
-          treatment_plan: prev.treatment_plan || dummyData.treatment_plan,
-          preventive_aspects: prev.preventive_aspects || dummyData.preventive_aspects,
-          rehabilitation: prev.rehabilitation || dummyData.rehabilitation,
-          desired_outcome: prev.desired_outcome || dummyData.desired_outcome,
-        }));
-        
-        // Also pre-fill selected investigations
-        if (!selectedInvestigations || selectedInvestigations.length === 0) {
-          const dummyInvestigations = dummyData.investigations.split(", ").filter(Boolean);
-          setSelectedInvestigations(dummyInvestigations);
-        }
+        // Removed dummy prefill
       }
     }
   }, [ipdNo, formData, selectedInvestigations]);

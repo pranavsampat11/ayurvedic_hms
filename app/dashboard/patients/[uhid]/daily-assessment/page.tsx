@@ -228,42 +228,7 @@ export default function DailyAssessmentPage({ params }: { params: Promise<{ uhid
         return;
       }
 
-      // If no assessments exist, seed with dummy data
-      if (!assessmentsData || assessmentsData.length === 0) {
-        try {
-          // Get IPD admission date to use as base for dummy data
-          const { data: ipdAdmission } = await supabase
-            .from('ipd_admissions')
-            .select('admission_date')
-            .eq('ipd_no', ipdNo)
-            .single();
-          
-          const baseDate = ipdAdmission?.admission_date || new Date().toISOString().slice(0, 10);
-          
-          // Import dummy data functions
-          const { getDummyDailyAssessments, buildSeedIpdProcedures, buildSeedIpdMedications } = await import('@/lib/dummy');
-          
-          // Seed daily assessments
-          const dummyAssessments = getDummyDailyAssessments(ipdNo, baseDate);
-          const { data: seededAssessments } = await supabase
-            .from('ipd_daily_assessments')
-            .insert(dummyAssessments)
-            .select('*');
-          
-          // Seed procedures and medications
-          const dummyProcedures = buildSeedIpdProcedures(ipdNo, baseDate);
-          const dummyMedications = buildSeedIpdMedications(ipdNo, baseDate);
-          
-          await supabase.from('procedure_entries').insert(dummyProcedures);
-          await supabase.from('internal_medications').insert(dummyMedications);
-          
-          // Use the seeded data
-          assessmentsData = seededAssessments;
-          console.log("Auto-seeded daily assessments with dummy data");
-        } catch (seedError) {
-          console.error("Error seeding dummy data:", seedError);
-        }
-      }
+      // Removed auto-seeding; rely on real data only
 
       const formattedAssessments = await Promise.all((assessmentsData || []).map(async assessment => {
          // Use the assessment date to match procedures and medications

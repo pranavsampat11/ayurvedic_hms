@@ -97,59 +97,7 @@ export default function PainAssessmentPage() {
               current_management: existingData.current_management || "",
             }));
           } else {
-            // Auto-seed pain assessment data if none exists
-            if (!existingData || existingError) {
-              try {
-                const { getDummyPainAssessments } = await import('@/lib/dummy');
-                const dummyPainAssessment = getDummyPainAssessments(ipdAdmission.ipd_no, ipdAdmission.admission_date)[0];
-                
-                if (dummyPainAssessment) {
-                  // Insert the dummy pain assessment
-                  const { data: seededAssessment } = await supabase
-                    .from("pain_assessments")
-                    .insert({
-                      ipd_no: ipdAdmission.ipd_no,
-                      location: dummyPainAssessment.pain_location,
-                      intensity: dummyPainAssessment.pain_intensity,
-                      character: dummyPainAssessment.pain_quality,
-                      frequency: dummyPainAssessment.pain_duration,
-                      duration: dummyPainAssessment.pain_duration,
-                      radiation: dummyPainAssessment.aggravating_factors,
-                      triggers: dummyPainAssessment.aggravating_factors,
-                      current_management: dummyPainAssessment.treatment_effectiveness,
-                      created_at: new Date().toISOString()
-                    })
-                    .select()
-                    .single();
-                  
-                  if (seededAssessment) {
-                    setExistingAssessment(seededAssessment);
-                    setEditing(true);
-                    setForm(prev => ({
-                      ...prev,
-                      patientName: ipdAdmission.patient?.full_name || "",
-                      uhid: ipdAdmission.uhid || "",
-                      age: ipdAdmission.patient?.age?.toString() || "",
-                      sex: ipdAdmission.patient?.gender || "",
-                      opipNo: ipdAdmission.ipd_no || "",
-                      location: seededAssessment.location || "",
-                      intensity: seededAssessment.intensity || "",
-                      character: seededAssessment.character || "",
-                      frequency: seededAssessment.frequency || "",
-                      duration: seededAssessment.duration || "",
-                      radiation: seededAssessment.radiation || "",
-                      triggers: seededAssessment.triggers || "",
-                      current_management: seededAssessment.current_management || "",
-                    }));
-                    console.log("Auto-seeded pain assessment for IPD patient");
-                    return;
-                  }
-                }
-              } catch (seedError) {
-                console.error("Error seeding pain assessment:", seedError);
-              }
-            }
-            
+            // No auto-seeding; just initialize basic form values
             setForm(prev => ({
               ...prev,
               patientName: ipdAdmission.patient?.full_name || "",
@@ -197,57 +145,6 @@ export default function PainAssessmentPage() {
                 current_management: existingData.current_management || "",
               }));
             } else {
-              // Auto-seed pain assessment data if none exists for OPD patient
-              try {
-                const { getDummyPainAssessments } = await import('@/lib/dummy');
-                const dummyPainAssessment = getDummyPainAssessments(opdVisit.opd_no, opdVisit.visit_date)[0];
-                
-                if (dummyPainAssessment) {
-                  // Insert the dummy pain assessment
-                  const { data: seededAssessment } = await supabase
-                    .from("pain_assessments")
-                    .insert({
-                      opd_no: opdVisit.opd_no,
-                      location: dummyPainAssessment.pain_location,
-                      intensity: dummyPainAssessment.pain_intensity,
-                      character: dummyPainAssessment.pain_quality,
-                      frequency: dummyPainAssessment.pain_duration,
-                      duration: dummyPainAssessment.pain_duration,
-                      radiation: dummyPainAssessment.aggravating_factors,
-                      triggers: dummyPainAssessment.aggravating_factors,
-                      current_management: dummyPainAssessment.treatment_effectiveness,
-                      created_at: new Date().toISOString()
-                    })
-                    .select()
-                    .single();
-                  
-                  if (seededAssessment) {
-                    setExistingAssessment(seededAssessment);
-                    setEditing(true);
-                    setForm(prev => ({
-                      ...prev,
-                      patientName: opdVisit.patient?.full_name || "",
-                      uhid: opdVisit.uhid || "",
-                      age: opdVisit.patient?.age?.toString() || "",
-                      sex: opdVisit.patient?.gender || "",
-                      opipNo: opdVisit.opd_no || "",
-                      location: seededAssessment.location || "",
-                      intensity: seededAssessment.intensity || "",
-                      character: seededAssessment.character || "",
-                      frequency: seededAssessment.frequency || "",
-                      duration: seededAssessment.duration || "",
-                      radiation: seededAssessment.radiation || "",
-                      triggers: seededAssessment.triggers || "",
-                      current_management: seededAssessment.current_management || "",
-                    }));
-                    console.log("Auto-seeded pain assessment for OPD patient");
-                    return;
-                  }
-                }
-              } catch (seedError) {
-                console.error("Error seeding pain assessment:", seedError);
-              }
-              
               const formData = {
                 ...form,
                 patientName: opdVisit.patient?.full_name || "",
