@@ -47,6 +47,8 @@ export function SignInForm() {
         router.push("/therapist/dashboard")
       } else if (data.role === "nurse") {
         router.push("/nurse/patients")
+      } else if (data.role === "technician") {
+        router.push("/technician/dashboard")
       } else {
         router.push("/dashboard")
       }

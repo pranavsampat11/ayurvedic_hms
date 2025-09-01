@@ -38,24 +38,24 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
   console.log("IpdCaseSheetForm received ipdNo:", ipdNo);
   const [formData, setFormData] = useState<any>(
     initialCaseSheet || {
-      ipd_no: ipdNo ?? "",
-      opd_no: opdNo ?? "",
-      uhid: patientUhId ?? "",
-      doctor_id: doctorId ?? "",
-      department: department ?? "",
-      ward: ward ?? "",
-      bed_no: bedNo ?? "",
-      admission_at: admissionDate ?? "",
+      ipd_no: ipdNo || "",
+      opd_no: opdNo || "",
+      uhid: patientUhId || "",
+      doctor_id: doctorId || "",
+      department: department || "",
+      ward: ward || "",
+      bed_no: bedNo || "",
+      admission_at: admissionDate || "",
       discharge_at: "",
       doa_time: "",
       dod_time: "",
-      op_no: opdNo ?? "",
-      ip_no: ipdNo ?? "",
-      age: age ?? "",
-      gender: gender ?? "Male",
+      op_no: opdNo || "",
+      ip_no: ipdNo || "",
+      age: age || "",
+      gender: gender || "Male",
       occupation: "",
-      address: address ?? "",
-      contact: contact ?? "",
+      address: address || "",
+      contact: contact || "",
       present_complaints: "",
       associated_complaints: "",
       past_history: "",
@@ -1723,7 +1723,7 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
           </div>
           <div className="grid gap-2">
             <Label htmlFor="doctor_id">Doctor ID</Label>
-            <Input id="doctor_id" value={formData.doctor_id} onChange={handleChange} required />
+            <Input id="doctor_id" value={formData.doctor_id || ""} onChange={handleChange} required />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="doctor_name">Doctor Name</Label>
@@ -1731,39 +1731,39 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
           </div>
           <div className="grid gap-2">
             <Label htmlFor="department">Department</Label>
-            <Input id="department" value={formData.department} onChange={handleChange} />
+            <Input id="department" value={formData.department || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="ward">Ward</Label>
-            <Input id="ward" value={formData.ward} onChange={handleChange} />
+            <Input id="ward" value={formData.ward || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="bed_no">Bed No</Label>
-            <Input id="bed_no" value={formData.bed_no} onChange={handleChange} />
+            <Input id="bed_no" value={formData.bed_no || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="admission_at">Admission Date</Label>
-            <Input id="admission_at" type="datetime-local" value={formData.admission_at} onChange={handleChange} />
+            <Input id="admission_at" type="datetime-local" value={formData.admission_at || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="discharge_at">Discharge Date</Label>
-            <Input id="discharge_at" type="datetime-local" value={formData.discharge_at} onChange={handleChange} />
+            <Input id="discharge_at" type="datetime-local" value={formData.discharge_at || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="doa_time">DOA Time</Label>
-            <Input id="doa_time" value={formData.doa_time} onChange={handleChange} />
+            <Input id="doa_time" value={formData.doa_time || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="dod_time">DOD Time</Label>
-            <Input id="dod_time" value={formData.dod_time} onChange={handleChange} />
+            <Input id="dod_time" value={formData.dod_time || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="op_no">OPD No</Label>
-            <Input id="op_no" value={formData.op_no} onChange={handleChange} />
+            <Input id="op_no" value={formData.op_no || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="age">Age</Label>
-            <Input id="age" type="number" value={formData.age} onChange={handleChange} />
+            <Input id="age" type="number" value={formData.age || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="gender">Gender</Label>
@@ -1792,31 +1792,31 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
           </div>
           <div className="grid gap-2 col-span-full">
             <Label htmlFor="present_complaints">Present Complaints</Label>
-            <Textarea id="present_complaints" value={formData.present_complaints} onChange={handleChange} />
+            <Textarea id="present_complaints" value={formData.present_complaints || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2 col-span-full">
             <Label htmlFor="associated_complaints">Associated Complaints</Label>
-            <Textarea id="associated_complaints" value={formData.associated_complaints} onChange={handleChange} />
+            <Textarea id="associated_complaints" value={formData.associated_complaints || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2 col-span-full">
             <Label htmlFor="past_history">Past History</Label>
-            <Textarea id="past_history" value={formData.past_history} onChange={handleChange} />
+            <Textarea id="past_history" value={formData.past_history || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2 col-span-full">
             <Label htmlFor="personal_history">Personal History</Label>
-            <Textarea id="personal_history" value={formData.personal_history} onChange={handleChange} />
+            <Textarea id="personal_history" value={formData.personal_history || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2 col-span-full">
             <Label htmlFor="obs_gyn_history">Obs/Gyn History</Label>
-            <Textarea id="obs_gyn_history" value={formData.obs_gyn_history} onChange={handleChange} />
+            <Textarea id="obs_gyn_history" value={formData.obs_gyn_history || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2 col-span-full">
             <Label htmlFor="previous_medicine_history">Previous Medicine History</Label>
-            <Textarea id="previous_medicine_history" value={formData.previous_medicine_history} onChange={handleChange} />
+            <Textarea id="previous_medicine_history" value={formData.previous_medicine_history || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2 col-span-full">
             <Label htmlFor="family_history">Family History</Label>
-            <Textarea id="family_history" value={formData.family_history} onChange={handleChange} />
+            <Textarea id="family_history" value={formData.family_history || ""} onChange={handleChange} />
           </div>
           {/* Add sections for general_examination, dasavidha_pariksha, asthasthana_pariksha, systemic_examination, sampraptighataka as needed */}
           {/* Individual Examination Fields */}
@@ -1964,11 +1964,11 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
           </div>
           <div className="grid gap-2 col-span-full">
             <Label htmlFor="local_examination">Local Examination</Label>
-            <Textarea id="local_examination" value={formData.local_examination} onChange={handleChange} />
+            <Textarea id="local_examination" value={formData.local_examination || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2 col-span-full">
             <Label htmlFor="pain_assessment">Pain Assessment</Label>
-            <Textarea id="pain_assessment" value={formData.pain_assessment} onChange={handleChange} />
+            <Textarea id="pain_assessment" value={formData.pain_assessment || ""} onChange={handleChange} />
           </div>
 
           {/* Investigations Section */}
@@ -2054,7 +2054,7 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
           </div>
           <div className="grid gap-2 col-span-full">
             <Label htmlFor="diagnosis">Diagnosis</Label>
-            <Textarea id="diagnosis" value={formData.diagnosis} onChange={handleChange} />
+            <Textarea id="diagnosis" value={formData.diagnosis || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="nutritional_status">Nutritional Status</Label>
@@ -2798,19 +2798,19 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
 
           <div className="grid gap-2 col-span-full">
             <Label htmlFor="treatment_plan">Treatment Plan</Label>
-            <Textarea id="treatment_plan" value={formData.treatment_plan} onChange={handleChange} />
+            <Textarea id="treatment_plan" value={formData.treatment_plan || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2 col-span-full">
             <Label htmlFor="preventive_aspects">Preventive Aspects</Label>
-            <Textarea id="preventive_aspects" value={formData.preventive_aspects} onChange={handleChange} />
+            <Textarea id="preventive_aspects" value={formData.preventive_aspects || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2 col-span-full">
             <Label htmlFor="rehabilitation">Rehabilitation</Label>
-            <Textarea id="rehabilitation" value={formData.rehabilitation} onChange={handleChange} />
+            <Textarea id="rehabilitation" value={formData.rehabilitation || ""} onChange={handleChange} />
           </div>
           <div className="grid gap-2 col-span-full">
             <Label htmlFor="desired_outcome">Desired Outcome</Label>
-            <Textarea id="desired_outcome" value={formData.desired_outcome} onChange={handleChange} />
+            <Textarea id="desired_outcome" value={formData.desired_outcome || ""} onChange={handleChange} />
           </div>
 
 

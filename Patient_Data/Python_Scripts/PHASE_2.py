@@ -1,245 +1,28 @@
-#Completely Working With IPD ADMISSIONS CODE FROM CURSOR TESTING PHASE 
+# PHASE 2: Seed IPD Sections (ONLY for Excel-based admissions) this is the new versionnnn
+# This script ONLY works with IPD admissions created from your Excel file
+# It will NOT touch any old/existing data in the database
+
 # 1. Install required libraries
 !pip install supabase pandas openpyxl
 
 import pandas as pd
-from datetime import datetime
+import random
+from datetime import date, timedelta, datetime, timezone
 from supabase import create_client
 
 # 2. Configure Supabase connection
 url = "https://yzmqdruerraecaoblrwv.supabase.co"
-key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6bXFkcnVlcnJhZWNhb2Jscnd2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MzAwODI1MCwiZXhwIjoyMDY4NTg0MjUwfQ.UOH4Z8tnrn2z_bJmhG-FdWFEm8sfft4CT0T8L3s18IE"  # Replace with your actual Service Role Key
+key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6bXFkcnVlcnJhZWNhb2Jscnd2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MzAwODI1MCwiZXhwIjoyMDY4NTg0MjUwfQ.UOH4Z8tnrn2z_bJmhG-FdWFEm8sfft4CT0T8L3s18IE"
 supabase = create_client(url, key)
 
-# 3. Load Excel file
+# 3. Load your Excel file to get the UHIDs
 df = pd.read_excel("patients_filled_may_trial.xlsx")
-print("Loaded rows:", len(df))
-  
-# --- Normalize Department/Sub Department (capitalize only first letter) ---
-df["Department"] = df["Department"].str.title().str.strip()
-if "Sub Department" in df.columns:
-    df["Sub Department"] = df["Sub Department"].str.title().str.strip()
+print(f"📊 Loaded Excel file with {len(df)} rows")
 
-# 4. Build department → doctor mapping from Supabase
-staff_resp = supabase.table("staff").select("*").execute()
-staff = staff_resp.data
+# Get UHIDs from your Excel file
+excel_uhids = set(df["uhid"].unique())
+print(f"🔍 Found {len(excel_uhids)} unique UHIDs in Excel file")
 
-dept_doctor_map = {}
-for s in staff:
-    if s["role"] == "doctor" and s["department_id"]:
-        dept_doctor_map[s["department_id"]] = s["id"]
-
-# 5. Build department name → id map from departments table
-dept_resp = supabase.table("departments").select("id, name").execute()
-departments = {d["name"]: d["id"] for d in dept_resp.data}
-
-# Sub-departments map
-subdept_resp = supabase.table("sub_departments").select("id, name").execute()
-sub_departments = {d["name"]: d["id"] for d in subdept_resp.data}
-
-# 6. Insert patients (skip duplicates by UHID)
-existing_patients = supabase.table("patients").select("uhid").execute()
-existing_uhids = {p["uhid"] for p in existing_patients.data}
-
-patients = df[["uhid", "full_name", "Gender", "Age", "mobile", "aadhar",
-               "address", "created_at", "complaints", "Department", "Sub Department"]]
-
-patients = patients.rename(columns={
-    "Gender": "gender",
-    "Age": "age",
-    "aadhar": "aadhaar",
-    "Department": "Department",
-    "Sub Department": "Sub_Department"
-})
-
-new_patients = patients[~patients["uhid"].isin(existing_uhids)]
-print(f"Skipping {len(patients) - len(new_patients)} patients (already exist)")
-print(f"Inserting {len(new_patients)} new patients")
-
-if not new_patients.empty:
-    new_patients = new_patients.where(pd.notnull(new_patients), None)
-    supabase.table("patients").insert(new_patients.to_dict(orient="records")).execute()
-    print("✅ Inserted new patients")
-
-# 7. Create appointments (skip duplicates by uhid + date)
-# Fetch existing appointments from Supabase
-existing_appts = supabase.table("appointments").select("uhid, appointment_date").execute()
-existing_appt_keys = {(a["uhid"], a["appointment_date"]) for a in existing_appts.data}
-
-appointments = []
-for idx, row in df.iterrows():
-    dept_id = departments.get(row["Department"])
-    sub_dept_id = sub_departments.get(row["Sub Department"]) if pd.notna(row.get("Sub Department")) else None
-    doctor_id = dept_doctor_map.get(dept_id)
-
-    if not dept_id or not doctor_id:
-        print(f"⚠️ Skipping {row['uhid']} - No doctor/department found")
-        continue
-
-    appt_date = str(pd.to_datetime(row["created_at"]).date())
-
-    if (row["uhid"], appt_date) in existing_appt_keys:
-        print(f"⏭️ Skipping duplicate appointment for {row['uhid']} on {appt_date}")
-        continue
-
-    appointments.append({
-        "uhid": row["uhid"],
-        "department_id": dept_id,
-        "sub_department_id": sub_dept_id,
-        "doctor_id": doctor_id,
-        "appointment_date": appt_date,
-        "reason": row.get("complaints", "Checkup"),
-        "status": "seen"
-    })
-
-appointments_inserted = []
-if appointments:
-    resp = supabase.table("appointments").insert(appointments).execute()
-    appointments_inserted = resp.data
-print("✅ Inserted appointments:", len(appointments_inserted))
-
-# 8. Insert OPD visits (only for new appointments)
-opd_visits = {}
-
-def make_opd_no(date, seq):
-    return f"OPD-{date.strftime('%Y%m%d')}-{seq:04d}"
-
-counts = {}
-
-for appt in appointments_inserted:
-    date = datetime.fromisoformat(appt["appointment_date"]).date()
-
-    # If first time for this date, check existing max sequence in DB
-    if date not in counts:
-        existing_opds = supabase.table("opd_visits") \
-            .select("opd_no") \
-            .ilike("opd_no", f"OPD-{date.strftime('%Y%m%d')}-%") \
-            .execute()
-
-        max_seq = 0
-        for e in existing_opds.data:
-            try:
-                seq = int(e["opd_no"].split("-")[-1])
-                max_seq = max(max_seq, seq)
-            except:
-                pass
-        counts[date] = max_seq  # start after the last used number
-
-    # Increment sequence
-    counts[date] += 1
-    opd_no = make_opd_no(date, counts[date])
-
-    if opd_no not in opd_visits:  # prevent duplicates in same run
-        opd_visits[opd_no] = {
-            "opd_no": opd_no,
-            "uhid": appt["uhid"],
-            "appointment_id": appt["id"],
-            "visit_date": str(date)
-        }
-
-
-# 9. Admit some OPD patients into IPD (skip duplicates)
-import random
-from datetime import timedelta
-
-def make_ipd_no(date, seq):
-    return f"IPD-{date.strftime('%Y%m%d')}-{seq:04d}"
-
-def admit_random_patients_to_ipd(supabase, df, n=10):
-    # Fetch OPD visits
-    opd_visits = supabase.table("opd_visits").select("*").execute().data
-    if not opd_visits:
-        print("⚠️ No OPD visits found to admit.")
-        return
-
-    # Fetch already admitted opd_no
-    existing_adm = supabase.table("ipd_admissions").select("opd_no, ipd_no").execute().data
-    admitted_opds = {adm["opd_no"] for adm in existing_adm}
-
-    # Build date → last admission seq map
-    counts = {}
-    for adm in existing_adm:
-        try:
-            seq = int(adm["ipd_no"].split("-")[-1])
-            date_str = adm["ipd_no"].split("-")[1]  # YYYYMMDD
-            counts[date_str] = max(counts.get(date_str, 0), seq)
-        except:
-            continue
-
-    # Filter OPDs not yet admitted
-    available_opds = [opd for opd in opd_visits if opd["opd_no"] not in admitted_opds]
-    if not available_opds:
-        print("⚠️ All OPD visits already admitted.")
-        return
-
-    # Pick random subset
-    import random
-    selected_opds = random.sample(available_opds, min(n, len(available_opds)))
-
-    # Fetch appointments for selected OPDs
-    appt_ids = [opd["appointment_id"] for opd in selected_opds]
-    appts = supabase.table("appointments").select("*").in_("id", appt_ids).execute().data
-    appt_map = {a["id"]: a for a in appts}
-
-    # Random assignment pools
-    wards = ["General", "Semi-Private", "Private", "ICU"]
-    reasons = ["Fever", "Surgery", "Observation", "Infection", "Accident", "Chronic illness"]
-
-    admissions = []
-
-    for opd in selected_opds:
-        appt = appt_map.get(opd["appointment_id"])
-        if not appt:
-            continue
-
-        # Get admission_date = created_at from Excel
-        created_at = df.loc[df["uhid"] == opd["uhid"], "created_at"].values
-        if len(created_at) == 0:
-            continue
-        admission_date = pd.to_datetime(created_at[0]).date()
-
-        # Discharge date = admission_date + random days
-        discharge_date = admission_date + pd.Timedelta(days=random.randint(2, 7))
-
-        # Generate ipd_no
-        date_str = admission_date.strftime("%Y%m%d")
-        counts[date_str] = counts.get(date_str, 0) + 1
-        ipd_no = f"IPD-{date_str}-{counts[date_str]:04d}"
-
-        admissions.append({
-            "ipd_no": ipd_no,
-            "uhid": opd["uhid"],
-            "opd_no": opd["opd_no"],
-            "doctor_id": appt["doctor_id"],
-            "ward": random.choice(wards),
-            "bed_number": f"{random.choice(['G','S','P','ICU'])}-{random.randint(1,30)}",
-            "admission_date": str(admission_date),
-            "discharge_date": str(discharge_date),
-            "admission_reason": random.choice(reasons),
-            "status": "discharged",
-            "deposit_amount": random.choice([500, 1000, 2000])
-        })
-
-    if admissions:
-        resp = supabase.table("ipd_admissions").insert(admissions).execute()
-        print(f"✅ Inserted {len(resp.data)} new IPD admissions")
-    else:
-        print("⚠️ No admissions created.")
-
-
-
-if opd_visits:
-    resp2 = supabase.table("opd_visits").insert(list(opd_visits.values())).execute()
-    print("✅ Inserted OPD visits:", len(resp2.data))
-
-# Call function (admit up to 50 patients)
-admit_random_patients_to_ipd(supabase,df,n=600)
-
-print("🎉 All done successfully!")
-
-# ---------------------- PHASE 2: Seed IPD sections ----------------------
-import random
-from datetime import date, timedelta
 try:
     from dateutil import parser
 except Exception:
@@ -251,7 +34,6 @@ def ensure_date_iso(v):
     try:
         if parser:
             return parser.parse(str(v)).date().isoformat()
-        # Fallback
         return str(pd.to_datetime(v).date())
     except Exception:
         return None
@@ -345,8 +127,18 @@ def get_doctor_department_name(doctor_id):
     d = supabase.table("departments").select("name").eq("id", dept_id).maybe_single().execute().data or {}
     return d.get("name")
 
-def fetch_admissions_all():
-    return supabase.table("ipd_admissions").select("*").execute().data or []
+def fetch_excel_based_admissions():
+    """ONLY fetch IPD admissions that were created from your Excel file"""
+    # Get all IPD admissions
+    all_admissions = supabase.table("ipd_admissions").select("*").execute().data or []
+
+    # Filter to ONLY those with UHIDs from your Excel file
+    excel_based_admissions = [adm for adm in all_admissions if adm["uhid"] in excel_uhids]
+
+    print(f"🔍 Found {len(all_admissions)} total IPD admissions in database")
+    print(f"✅ Filtered to {len(excel_based_admissions)} admissions from your Excel file")
+
+    return excel_based_admissions
 
 def fetch_latest_appointment(uhid):
     res = supabase.table("appointments").select("*").eq("uhid", uhid).order("appointment_date", desc=True).limit(1).execute()
@@ -488,13 +280,39 @@ def build_internal_meds(adm, anchor_date_iso):
     delete_med_dispense_chain(adm["ipd_no"])
     delete_then_insert("internal_medications", "ipd_no", adm["ipd_no"], rows)
 
-def create_med_dispense_requests(adm):
+def create_med_dispense_requests_and_dispensed(adm):
     meds = supabase.table("internal_medications").select("id").eq("ipd_no", adm["ipd_no"]).execute().data or []
-    delete_then_insert("medication_dispense_requests", "ipd_no", adm["ipd_no"], [])
+    
+    # Delete existing records first
+    delete_med_dispense_chain(adm["ipd_no"])
+    
     if meds:
-        supabase.table("medication_dispense_requests").insert([
-            {"ipd_no": adm["ipd_no"], "medication_id": m["id"], "status": "pending"} for m in meds
-        ]).execute()
+        # Create medication dispense requests
+        requests = []
+        for m in meds:
+            requests.append({
+                "ipd_no": adm["ipd_no"], 
+                "medication_id": m["id"], 
+                "status": "completed"  # Since these are past patients, status is completed
+            })
+        
+        # Insert the requests
+        supabase.table("medication_dispense_requests").insert(requests).execute()
+        
+        # Get the created request IDs
+        created_requests = supabase.table("medication_dispense_requests").select("id").eq("ipd_no", adm["ipd_no"]).execute().data or []
+        
+        # Create dispensed_medications records (since these are past patients, meds were already dispensed)
+        dispensed_records = []
+        for req in created_requests:
+            dispensed_records.append({
+                "request_id": req["id"],
+                "dispensed_by": adm.get("doctor_id") or "staff_1",  # Use doctor or fallback
+                "dispensed_date": f"{ensure_date_iso(adm.get('admission_date'))}T10:00:00Z"  # Dispensed on admission date
+            })
+        
+        if dispensed_records:
+            supabase.table("dispensed_medications").insert(dispensed_records).execute()
 
 def build_med_admin_charts(adm, anchor_date_iso):
     charts = []
@@ -556,7 +374,7 @@ def build_procedure_entries_and_assignments(adm, therapists_by_dept, anchor_date
         })
     # Use chain delete to avoid FK violations
     delete_proc_req_chain(adm["ipd_no"])
-    
+
     # Insert procedure entries first
     if entries:
         supabase.table("procedure_entries").insert(entries).execute()
@@ -587,14 +405,30 @@ def build_procedure_entries_and_assignments(adm, therapists_by_dept, anchor_date
             "requirements": rand_text(["Oil, Herbs","Bandage, Gauze","Steam setup","Saline"]),
             "quantity": rand_text(["1","2","3","5"]),
             "requested_by": adm.get("doctor_id"),
-            "status": "pending",
+            "status": "completed",  # Since these are past patients, status is completed
         })
-    
+
     # Insert the dependent records
     if assignments:
         supabase.table("therapist_assignments").insert(assignments).execute()
     if reqs:
         supabase.table("procedure_medicine_requirement_requests").insert(reqs).execute()
+        
+        # Get the created request IDs
+        created_proc_reqs = supabase.table("procedure_medicine_requirement_requests").select("id").eq("ipd_no", adm["ipd_no"]).execute().data or []
+        
+        # Create dispensed_procedure_requirements records (since these are past patients, requirements were already dispensed)
+        dispensed_proc_records = []
+        for req in created_proc_reqs:
+            dispensed_proc_records.append({
+                "request_id": req["id"],
+                "dispensed_by": adm.get("doctor_id") or "staff_1",  # Use doctor or fallback
+                "dispensed_date": f"{ensure_date_iso(adm.get('admission_date'))}T10:00:00Z",  # Dispensed on admission date
+                "notes": rand_text(["Dispensed as requested", "All items provided", "Patient received"])
+            })
+        
+        if dispensed_proc_records:
+            supabase.table("dispensed_procedure_requirements").insert(dispensed_proc_records).execute()
 
 def build_pain_assessment(adm):
     row = {
@@ -607,7 +441,7 @@ def build_pain_assessment(adm):
         "radiation": rand_text(["None","To leg","To shoulder"]),
         "triggers": rand_text(["Movement","Cold","Pressure"]),
         "current_management": rand_text(["Heat therapy","Analgesic","Rest"]),
-        "created_at": datetime.utcnow().isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat()  # Fixed for older Python versions
     }
     delete_then_insert("pain_assessments", "ipd_no", adm["ipd_no"], [row])
 
@@ -712,7 +546,7 @@ def build_discharge_summary(adm):
     }
     delete_then_insert("discharge_summaries", "ipd_no", adm["ipd_no"], [row])
 
-# ---------------- Extra IPD sections ----------------
+# Extra IPD sections
 def build_procedure_sessions(adm, anchor_date_iso, staff_all):
     # Link to existing procedure_entries for this IPD
     entries = supabase.table("procedure_entries").select("id").eq("ipd_no", adm["ipd_no"]).execute().data or []
@@ -731,7 +565,7 @@ def build_procedure_sessions(adm, anchor_date_iso, staff_all):
             "patient_response": rand_text(["Improved","Stable"]),
             "next_session_date": anchor_date_iso,
         })
-    
+
     # Delete existing sessions first, then insert new ones
     supabase.table("procedure_sessions").delete().eq("ipd_no", adm["ipd_no"]).execute()
     if rows:
@@ -791,20 +625,37 @@ def build_billing_records(adm, anchor_date_iso):
     } for desc, amt in items]
     delete_then_insert("billing_records", "ipd_no", adm["ipd_no"], rows)
 
-# Execute seeding over all admissions
+# Execute seeding ONLY for Excel-based admissions
 try:
+    print("🚀 Starting Phase 2: IPD Sections Seeding")
+    print("=" * 50)
+
+    # Fetch staff maps
     therapists_by_dept, nurses, staff_all = fetch_staff_maps()
-    admissions = fetch_admissions_all()
-    print(f"Seeding IPD sections for {len(admissions)} admissions...")
-    for adm in admissions:
+    print(f"👥 Loaded {len(staff_all)} staff members")
+
+    # Fetch ONLY admissions from your Excel file
+    admissions = fetch_excel_based_admissions()
+
+    if not admissions:
+        print("⚠️ No Excel-based IPD admissions found. Please run Phase 1 first!")
+        exit()
+
+    print(f"📋 Seeding IPD sections for {len(admissions)} Excel-based admissions...")
+    print("=" * 50)
+
+    for i, adm in enumerate(admissions, 1):
+        print(f"🔄 Processing admission {i}/{len(admissions)}: {adm['ipd_no']} (UHID: {adm['uhid']})")
+
         base = ensure_date_iso(adm.get("admission_date")) or date.today().isoformat()
         anchor_date_iso = random_date_in_month(base)
+
+        # Build all IPD sections
         build_ipd_case_sheet(adm, anchor_date_iso)
         build_internal_meds(adm, anchor_date_iso)
-        create_med_dispense_requests(adm)
+        create_med_dispense_requests_and_dispensed(adm)  # Updated function name
         build_med_admin_charts(adm, anchor_date_iso)
         build_procedure_entries_and_assignments(adm, therapists_by_dept, anchor_date_iso)
-        # New: extra IPD sections
         build_procedure_sessions(adm, anchor_date_iso, staff_all)
         build_referred_assessments(adm, staff_all, anchor_date_iso)
         build_requested_investigations(adm, anchor_date_iso)
@@ -815,6 +666,14 @@ try:
         build_diet(adm, anchor_date_iso)
         build_daily_assessments(adm, anchor_date_iso)
         build_discharge_summary(adm)
-    print("✅ IPD sections seeding complete.")
+
+        print(f"✅ Completed admission {i}/{len(admissions)}")
+
+    print("=" * 50)
+    print("🎉 Phase 2 completed successfully!")
+    print(f"✅ Seeded IPD sections for {len(admissions)} Excel-based admissions")
+
 except Exception as e:
-    print("❌ Error seeding IPD sections:", e)
+    print("❌ Error in Phase 2:", e)
+    import traceback
+    traceback.print_exc()

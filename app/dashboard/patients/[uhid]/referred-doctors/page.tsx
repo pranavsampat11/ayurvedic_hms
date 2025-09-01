@@ -355,38 +355,177 @@ export default function ReferredDoctorsPage({ params }: { params: Promise<{ uhid
         if (error) throw error;
       } else {
         // Create new referrals for each selected doctor
-                 console.log('Current Doctor ID:', currentDoctorId);
-         console.log('Selected Doctors:', selectedDoctors);
-         
-         const referrals = selectedDoctors.map(doctorId => {
-           const doctor = staffList.find(s => s.id === doctorId);
-           const referralData = {
-             ipd_no: resolvedParams.uhid,
-             referred_by_id: currentDoctorId, // Use the doctor ID from IPD admission
-             referred_to_id: doctorId,
-             department: doctor?.department || '',
-             assessment_note: currentAssessment.assessment_note || '',
-             advice: currentAssessment.advice || '',
-             recommended_procedures: currentAssessment.recommended_procedures || '',
-             recommended_meds: currentAssessment.recommended_meds || '',
-             status: 'pending',
-             priority: currentAssessment.priority || 'normal'
-           };
-           console.log('Creating referral with data:', referralData);
-           return referralData;
-         });
+        console.log('Current Doctor ID:', currentDoctorId);
+        console.log('Selected Doctors:', selectedDoctors);
+        
+        // Get patient UHID from IPD admission
+        const { data: ipdData, error: ipdError } = await supabase
+          .from('ipd_admissions')
+          .select('uhid')
+          .eq('ipd_no', resolvedParams.uhid)
+          .single();
+
+        if (ipdError) {
+          console.error('Error fetching patient UHID:', ipdError);
+          throw new Error('Could not fetch patient information');
+        }
+
+        const patientUhid = ipdData.uhid;
+        
+        const referrals = selectedDoctors.map(doctorId => {
+          const doctor = staffList.find(s => s.id === doctorId);
+          const referralData = {
+            ipd_no: resolvedParams.uhid,
+            referred_by_id: currentDoctorId, // Use the doctor ID from IPD admission
+            referred_to_id: doctorId,
+            department: doctor?.department || '',
+            assessment_note: currentAssessment.assessment_note || '',
+            advice: currentAssessment.advice || '',
+            recommended_procedures: currentAssessment.recommended_procedures || '',
+            recommended_meds: currentAssessment.recommended_meds || '',
+            status: 'pending',
+            priority: currentAssessment.priority || 'normal'
+          };
+          console.log('Creating referral with data:', referralData);
+          return referralData;
+        });
 
         const { error } = await supabase
           .from('referred_assessments')
           .insert(referrals);
 
         if (error) throw error;
-      }
 
-      toast({
-        title: "Success",
-        description: currentAssessment.id ? "Referral updated successfully." : "Referrals created successfully.",
-      });
+        // Create appointments and OPD visits for each referred doctor
+        console.log('Starting appointment and OPD visit creation for doctors:', selectedDoctors);
+        console.log('Patient UHID:', patientUhid);
+        
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+        const createdOpdVisits = [];
+
+        for (const doctorId of selectedDoctors) {
+          const doctor = staffList.find(s => s.id === doctorId);
+          
+          // 1. Create appointment for this doctor
+          const appointmentPayload = {
+            uhid: patientUhid,
+            doctor_id: doctorId,
+            department_id: null, // We don't have department info in referral context
+            sub_department_id: null,
+            appointment_date: today,
+            reason: `Referred by ${staffList.find(s => s.id === currentDoctorId)?.full_name || 'Unknown'} - ${currentAssessment.assessment_note || 'No specific complaint'}`,
+            status: "pending"
+          };
+
+          console.log(`Creating appointment for doctor ${doctorId}:`, appointmentPayload);
+          
+          const { data: appointmentData, error: appointmentError } = await supabase
+            .from("appointments")
+            .insert([appointmentPayload])
+            .select()
+            .single();
+
+          if (appointmentError) {
+            console.error(`Error creating appointment for doctor ${doctorId}:`, appointmentError);
+            continue; // Skip this doctor but continue with others
+          }
+
+          // 2. Create OPD visit with correct format
+          const opdPrefix = `OPD-${today.replace(/-/g, '')}-`;
+          const { data: existingOpdData } = await supabase
+            .from("opd_visits")
+            .select("opd_no")
+            .ilike("opd_no", `${opdPrefix}%`);
+
+          let maxOpdNum = 0;
+          if (existingOpdData && existingOpdData.length > 0) {
+            existingOpdData.forEach((row: any) => {
+              const match = row.opd_no.match(/(\d{4})$/)
+              if (match) {
+                const num = parseInt(match[1], 10)
+                if (num > maxOpdNum) maxOpdNum = num
+              }
+            });
+          }
+          
+          const nextOpdNum = (maxOpdNum + 1).toString().padStart(4, "0");
+          const opd_no = `${opdPrefix}${nextOpdNum}`;
+
+          const opdVisitPayload = {
+            opd_no,
+            uhid: patientUhid,
+            appointment_id: appointmentData.id,
+            visit_date: today
+          };
+
+          console.log(`Creating OPD visit for doctor ${doctorId}:`, opdVisitPayload);
+
+          const { data: opdVisitData, error: opdVisitError } = await supabase
+            .from("opd_visits")
+            .insert([opdVisitPayload])
+            .select()
+            .single();
+
+          if (opdVisitError) {
+            console.error(`Error creating OPD visit for doctor ${doctorId}:`, opdVisitError);
+            continue; // Skip this doctor but continue with others
+          }
+
+          createdOpdVisits.push({
+            doctor: doctor?.full_name || 'Unknown Doctor',
+            opd_no: opd_no,
+            appointment_id: appointmentData.id
+          });
+
+          console.log(`Successfully created appointment and OPD visit for doctor ${doctorId}:`, { appointmentData, opdVisitData });
+        }
+
+        if (createdOpdVisits.length > 0) {
+          console.log('Successfully created OPD visits:', createdOpdVisits);
+          
+          // Show success popup with OPD numbers for each referred doctor
+          toast({
+            title: "OPD Visits Created Successfully",
+            description: (
+              <div className="space-y-2">
+                <p>New OPD visits have been created for the referred doctors:</p>
+                <div className="bg-green-50 p-3 rounded border">
+                  {createdOpdVisits.map((visit, index) => (
+                    <div key={visit.opd_no} className="text-sm">
+                      <strong>{visit.doctor}</strong>: {visit.opd_no}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ),
+            variant: "default",
+          });
+          
+          // Show the general referral success toast after a longer delay
+          // This gives user time to read the OPD details first
+          setTimeout(() => {
+            toast({
+              title: "Success",
+              description: currentAssessment.id ? "Referral updated successfully." : "Referrals created successfully.",
+            });
+          }, 4000); // 4 seconds delay - enough time to read OPD details
+        } else {
+          console.log('No OPD visits were created successfully');
+          toast({
+            title: "Warning",
+            description: "Referral created but failed to create OPD visits. Please create OPD visits manually.",
+            variant: "destructive",
+          });
+          
+          // Show the general referral success toast after a delay
+          setTimeout(() => {
+            toast({
+              title: "Success",
+              description: currentAssessment.id ? "Referral updated successfully." : "Referrals created successfully.",
+            });
+          }, 3000); // 3 seconds delay for warning case
+        }
+      }
 
       setCurrentAssessment(null);
       setSelectedDoctors([]);

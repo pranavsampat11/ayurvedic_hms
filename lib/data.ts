@@ -12,9 +12,11 @@ import {
   CalendarIcon as CalendarIconLucide,
   FileText,
   Pill,
+  Clock,
+  CheckCircle,
 } from "lucide-react"
 
-export type UserRole = "admin" | "receptionist" | "doctor" | "pharmacist" | "accountant"
+export type UserRole = "admin" | "receptionist" | "doctor" | "pharmacist" | "accountant" | "technician"
 
 export interface Patient {
   uhid: string
@@ -331,7 +333,7 @@ export const getNavigationLinks = (role: UserRole) => {
       name: "Dashboard",
       href: "/dashboard",
       icon: Home,
-      roles: ["admin", "receptionist", "doctor", "pharmacist", "accountant"],
+      roles: ["admin", "receptionist", "doctor", "pharmacist", "accountant", "technician"],
     },
     {
       name: "Patients",
@@ -364,6 +366,10 @@ export const getNavigationLinks = (role: UserRole) => {
     accountant: [
       { name: "Invoices", href: "/invoices", icon: FileText, roles: ["accountant"] },
       { name: "Payments", href: "/payments", icon: DollarSign, roles: ["accountant"] },
+    ],
+    technician: [
+      { name: "Pending Investigations", href: "/technician/pending-investigations", icon: Clock, roles: ["technician"] },
+      { name: "Completed Investigations", href: "/technician/completed-investigations", icon: CheckCircle, roles: ["technician"] },
     ],
   }
 

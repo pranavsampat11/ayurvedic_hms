@@ -133,7 +133,75 @@ export default function PainManagementPage() {
         return;
       }
 
-      // No dummy fallback; rely on real data only
+      // If no pain management entries exist, show dummy data directly in UI
+      if (!data || data.length === 0) {
+        console.log("No pain management data found, creating dummy data for display...");
+        
+        // Get patient's creation date to use as base for dummy data dates
+        let baseDate = new Date();
+        try {
+          const { data: patientData } = await supabase
+            .from('patients')
+            .select('created_at')
+            .eq('uhid', patientData?.uhid || uhid)
+            .single();
+          
+          if (patientData?.created_at) {
+            baseDate = new Date(patientData.created_at);
+            console.log("Using patient creation date as base:", baseDate);
+          }
+        } catch (error) {
+          console.log("Could not fetch patient creation date, using current date");
+        }
+        
+        // Create dummy pain management entries with dates based on patient creation
+        const dummyPainManagements = [
+          {
+            id: "dummy_1",
+            ipd_no: uhid,
+            date_time: new Date(baseDate.getTime() + 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day after creation
+            pain_score: 7,
+            intervention: "Pain medication administered - Paracetamol 500mg, Heat therapy applied",
+            outcome: "Pain reduced from 8/10 to 6/10",
+            side_effects: "Mild drowsiness",
+            advice: "Continue current treatment, monitor for side effects",
+            staff_id: defaultStaffId || "staff_001",
+            created_at: new Date(baseDate.getTime() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+            staff: { full_name: "Dr. Staff Member" }
+          },
+          {
+            id: "dummy_2",
+            ipd_no: uhid,
+            date_time: new Date(baseDate.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days after creation
+            pain_score: 5,
+            intervention: "Massage therapy, Physiotherapy session",
+            outcome: "Pain reduced significantly, improved mobility",
+            side_effects: "None",
+            advice: "Continue physiotherapy, avoid strenuous activity",
+            staff_id: defaultStaffId || "staff_001",
+            created_at: new Date(baseDate.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+            staff: { full_name: "Dr. Staff Member" }
+          },
+          {
+            id: "dummy_3",
+            ipd_no: uhid,
+            date_time: new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days after creation
+            pain_score: 8,
+            intervention: "Cold therapy applied, Position change",
+            outcome: "Pain reduced slightly, patient more comfortable",
+            side_effects: "Temporary skin redness",
+            advice: "Apply cold therapy as needed, maintain comfortable position",
+            staff_id: defaultStaffId || "staff_001",
+            created_at: new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+            staff: { full_name: "Dr. Staff Member" }
+          }
+        ];
+        
+        console.log("Created dummy pain management entries for display with dates based on patient creation");
+        setPainManagements(dummyPainManagements);
+        setLoading(false);
+        return;
+      }
 
       setPainManagements(data || []);
     } catch (error) {
@@ -156,8 +224,16 @@ export default function PainManagementPage() {
     setCurrentEntry(null);
     setEditingIndex(null);
     
-    // Open empty form; no dummy prefill
-    setForm({ date: "", time: "", painScore: "", intervention: "", outcome: "", sideEffects: "", advices: "" });
+    // Pre-fill form with dummy data
+    setForm({
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toTimeString().slice(0, 5),
+      painScore: "6",
+      intervention: "Pain medication administered - Paracetamol 500mg, Heat therapy applied to affected area",
+      outcome: "Pain reduced moderately from 8/10 to 6/10",
+      sideEffects: "Mild drowsiness",
+      advices: "Continue current treatment, monitor for side effects, apply heat as needed",
+    });
     setShowForm(true);
   };
 

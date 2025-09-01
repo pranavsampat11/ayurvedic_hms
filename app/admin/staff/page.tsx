@@ -116,7 +116,7 @@ export default function AdminStaffPage() {
                       <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
                         <UserCircle2 className="h-6 w-6 text-blue-600" />
                       </div>
-                      <div>
+    <div>
                         <div className="font-semibold text-gray-900">{doc.full_name}</div>
                         <div className="text-xs text-gray-600">{doc.department_id ? DEPARTMENTS_MAP[doc.department_id] : "N/A"}</div>
                       </div>
@@ -234,8 +234,8 @@ export default function AdminStaffPage() {
                 <Shield className="h-12 w-12 mx-auto mb-4 text-purple-600" />
                 <h3 className="font-semibold mb-2">Access Control</h3>
                 <p className="text-sm text-gray-600">Control access to different system modules</p>
-              </div>
-            </div>
+      </div>
+    </div>
             <div className="mt-8 text-center text-gray-500">
               <p>Staff management functionality will be implemented in the next phase.</p>
             </div>
