@@ -1,4 +1,4 @@
-# PHASE 2: Seed IPD Sections (ONLY for Excel-based admissions) this is the new versionnnn
+# PHASE 2: Seed IPD Sections (ONLY for Excel-based admissions) - THIS IS THE VERSION WE ARE WORKING ON 
 # This script ONLY works with IPD admissions created from your Excel file
 # It will NOT touch any old/existing data in the database
 
@@ -194,6 +194,36 @@ def build_ipd_case_sheet(adm, anchor_date_iso):
         "address": demo.get("address"),
         "contact": demo.get("contact"),
 
+        # Individual examination fields
+        "height": str(random.randint(150, 180)),  # Height in cm
+        "weight": str(random.randint(50, 90)),    # Weight in kg
+        "bmi": str(round(random.uniform(18.5, 30.0), 1)),  # BMI
+        "pulse": str(random.randint(70, 100)),    # Pulse rate
+        "rr": str(random.randint(16, 22)),        # Respiratory rate
+        "bp": rand_text(["118/76","120/80","124/82","130/86","140/90"]),  # Blood pressure
+        
+        # Systemic examination as JSONB (matching the reference structure)
+        "systemic_examination": {
+            "RespiratorySystem": rand_text([
+                "Clear breath sounds, no crepitations",
+                "Normal breath sounds, no wheezing",
+                "Bilateral air entry equal, no added sounds",
+                "Clear chest, no respiratory distress"
+            ]),
+            "CVS": rand_text([
+                "S1 S2 heard, no murmurs",
+                "Regular rhythm, no murmurs",
+                "Normal heart sounds, no added sounds",
+                "S1S2 normal, no murmurs"
+            ]),
+            "CNS": rand_text([
+                "Conscious, oriented, no focal deficit",
+                "Higher mental functions normal, cranial nerves intact",
+                "Alert, responsive, normal coordination",
+                "Conscious, oriented, no neurological deficits"
+            ])
+        },
+
         "present_complaints": pick_from_list(present_opts, 1, 3),
         "associated_complaints": pick_from_list(assoc_opts, 1, 3),
         "past_history": rand_text(["Nil","Diabetes","Hypertension","Asthma"]),
@@ -204,41 +234,39 @@ def build_ipd_case_sheet(adm, anchor_date_iso):
 
         "general_examination": {"bp": "120/80", "pulse": random.randint(72, 92), "spo2": random.randint(96, 99)},
         "dasavidha_pariksha": {
-            "prakriti": rand_text(["Vata","Pitta","Kapha","Vata-Pitta"]),
-            "vikriti": rand_text(["Vata","Pitta","Kapha"]),
-            "sara": rand_text(["Mamsa","Rakta","Meda"]),
-            "samhanana": rand_text(["Madhyama","Sthira"]),
-            "pramana": rand_text(["Madhyama","Alpa"]),
-            "satmya": rand_text(["Madhura","Lavanya","Mixed"]),
-            "satva": rand_text(["Madhyama","Avara","Pravara"]),
-            "ahara_shakti": rand_text(["Madhyama","Avara"]),
-            "vyayama_shakti": rand_text(["Madhyama","Avara"]),
-            "vaya": rand_text(["Yuva","Madhyama","Vriddha"]),
+           "Prakriti": rand_text(["Vata","Pitta","Kapha"]),
+            "Vikriti": rand_text(["Vata","Pitta","Kapha"]),
+            "Sara": rand_text(["Uttam","Madhyam","Avara"]),
+            "Samhanana": rand_text(["Uttam","Madhyam","Avara"]),
+            "Pramana": rand_text(["Uttam","Madhyam","Avara"]),
+            "Satmya": rand_text(["Uttam","Madhyam","Avara"]),
+            "Satva": rand_text(["Uttam","Madhyam","Avara"]),
+            "AharaShakti": rand_text(["Pravara","Madhyam","Avara"]),
+            "VyayamShakti": rand_text(["Pravara","Madhyam","Avara"]),
+            "Vaya": rand_text(["Uttam","Madhyam","Avara"]),
         },
         "asthasthana_pariksha": {
-            "nadi": rand_text(["Vata","Pitta","Kapha"]),
-            "mala": rand_text(["Samyaka","Alpa","Krura"]),
-            "mutra": rand_text(["Samyaka","Alpa"]),
-            "jihva": rand_text(["Nirmala","Saama"]),
-            "shabda": rand_text(["Samyaka"]),
-            "sparsha": rand_text(["Samashita","Ushna"]),
-            "drik": rand_text(["Prakrita"]),
-            "aakruti": rand_text(["Madhyama","Sthula","Krisha"]),
+            "Nadi": rand_text(["Vata","Pitta","Kapha"]),
+            "Mala": rand_text(["Samyaka","Alpa","Krura"]),
+            "Mootra": rand_text(["Samyaka","Alpa"]),
+            "Jihva": rand_text(["Nirmala","Saama"]),
+            "Shabda": rand_text(["Samyaka"]),
+            "Sparsha": rand_text(["Samashita","Ushna"]),
+            "Drika": rand_text(["Prakrita"]),
+            "Akruti": rand_text(["Madhyama","Sthula","Krisha"]),
         },
         "sampraptighataka": {
-            "dosha": rand_text(["Vata","Pitta","Kapha"]),
-            "dushya": rand_text(["Mamsa","Rakta","Meda","Asthi"]),
-            "srotas": rand_text(["Mamsavaha","Raktavaha","Meda"]),
-            "agni": rand_text(["Mandagni","Vishamagni","Tikshnagni"]),
-            "ama": rand_text(["Present","Absent"]),
-            "sthana_samsraya": rand_text(["Kati","Janu","Greeva"]),
-            "udbhava_sthana": rand_text(["Pakwashaya","Amashaya"]),
-            "vyakta_sthana": rand_text(["Kati","Janu","Greeva"]),
-            "sanchara": rand_text(["Yes","No"]),
-            "vyadhi_marga": rand_text(["Bahya","Madhyama","Abhyantara"]),
-            "rogamarga": rand_text(["Madhyama"]),
-            "sadhya_asadhyata": rand_text(["Sadhya","Krichra Sadhya","Asadhya"]),
+           "Dosha": rand_text(["Vata","Pitta","Kapha"]),
+            "SrothoDushti": rand_text(["Mamsa","Rakta","Meda","Asthi"]),
+            "Vyaktasthana": rand_text(["Mamsavaha","Raktavaha","Meda"]),
+            "Dushya": rand_text(["Mandagni","Vishamagni","Tikshnagni"]),
+            "Udhabavasthana": rand_text(["Present","Absent"]),
+            "Vyadibheda": rand_text(["Kati","Janu","Greeva"]),
+            "Srothas": rand_text(["Pakwashaya","Amashaya"]),
+            "Sancharastana": rand_text(["Kati","Janu","Greeva"]),
+            "Sadhyaasadhyatha": rand_text(["Yes","No"]),
         },
+         "local_examination": rand_text(["Within normal limits","Tenderness present","Swelling noted","No abnormalities"]),
         "pain_assessment": rand_text(["VAS 4/10","VAS 6/10","VAS 7/10"]),
         "investigations": rand_text(["CBC, RFT","X-Ray","MRI as advised"]),
         "diagnosis": rand_text(["Vata vyadhi","Pitta vyadhi","Kapha vyadhi"]),

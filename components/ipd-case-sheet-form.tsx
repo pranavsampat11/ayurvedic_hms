@@ -70,9 +70,7 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
       pulse: "",
       rr: "",
       bp: "",
-      respiratory_system: "",
-      cvs: "",
-      cns: "",
+
       general_examination: {},
       dasavidha_pariksha: {},
       asthasthana_pariksha: {},
@@ -1385,7 +1383,7 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
         "local_examination","sampraptighataka","pain_assessment","investigations",
         "diagnosis","nutritional_status","treatment_plan","preventive_aspects",
         "rehabilitation","desired_outcome","height","weight","bmi","pulse","rr",
-        "bp","respiratory_system","cvs","cns","patient_name","uhid"
+        "bp","patient_name","uhid"
       ];
       const payload: any = {};
       for (const key of allowedKeys) {
@@ -1832,14 +1830,7 @@ export default function IpdCaseSheetForm({ initialCaseSheet, patientUhId, doctor
             </div>
           </div>
           
-          <div className="col-span-full border rounded p-4 mb-4">
-            <Label className="font-bold mb-2">Systemic Examination</Label>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              <Input id="respiratory_system" placeholder="Respiratory System" value={formData.respiratory_system || ""} onChange={handleChange} />
-              <Input id="cvs" placeholder="CVS" value={formData.cvs || ""} onChange={handleChange} />
-              <Input id="cns" placeholder="CNS" value={formData.cns || ""} onChange={handleChange} />
-            </div>
-          </div>
+
 
           
           <div className="col-span-full border rounded p-4 mb-4">
