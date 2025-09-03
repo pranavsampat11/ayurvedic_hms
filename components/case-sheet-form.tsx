@@ -72,6 +72,7 @@ export default function CaseSheetForm({ initialCaseSheet, patientUhId, opNo, doc
       preventive_aspects: "",
       rehabilitation: "",
       desired_outcome: "",
+      OPD_NEXT_FOLLOW_UP: "",
     }
   )
 
@@ -84,6 +85,22 @@ export default function CaseSheetForm({ initialCaseSheet, patientUhId, opNo, doc
       setFormData((prev: any) => ({
         ...prev,
         ...initialCaseSheet,
+        OPD_NEXT_FOLLOW_UP: (initialCaseSheet as any).OPD_NEXT_FOLLOW_UP || "",
+        chief_complaints: (initialCaseSheet as any).chief_complaints || "",
+        associated_complaints: (initialCaseSheet as any).associated_complaints || "",
+        past_history: (initialCaseSheet as any).past_history || "",
+        personal_history: (initialCaseSheet as any).personal_history || "",
+        allergy_history: (initialCaseSheet as any).allergy_history || "",
+        family_history: (initialCaseSheet as any).family_history || "",
+        obs_gyn_history: (initialCaseSheet as any).obs_gyn_history || "",
+        local_examination: (initialCaseSheet as any).local_examination || "",
+        pain_assessment: (initialCaseSheet as any).pain_assessment || "",
+        investigations: (initialCaseSheet as any).investigations || "",
+        diagnosis: (initialCaseSheet as any).diagnosis || "",
+        treatment_plan: (initialCaseSheet as any).treatment_plan || "",
+        preventive_aspects: (initialCaseSheet as any).preventive_aspects || "",
+        rehabilitation: (initialCaseSheet as any).rehabilitation || "",
+        desired_outcome: (initialCaseSheet as any).desired_outcome || "",
         // Map individual examination fields
         height: (initialCaseSheet as any).height || "",
         weight: (initialCaseSheet as any).weight || "",
@@ -2052,6 +2069,10 @@ export default function CaseSheetForm({ initialCaseSheet, patientUhId, opNo, doc
             <Label htmlFor="desired_outcome">Desired Outcome</Label>
             <Textarea id="desired_outcome" value={formData.desired_outcome} onChange={handleChange} />
           </div>
+          <div className="grid gap-2 col-span-full">
+            <Label htmlFor="OPD_NEXT_FOLLOW_UP">Next OPD Follow-up</Label>
+            <Input id="OPD_NEXT_FOLLOW_UP" value={formData.OPD_NEXT_FOLLOW_UP || ""} onChange={handleChange} />
+          </div>
           <div className="col-span-full flex justify-end gap-2">
             <Button 
               type="button" 
@@ -2098,6 +2119,7 @@ export default function CaseSheetForm({ initialCaseSheet, patientUhId, opNo, doc
                   preventive_aspects: formData.preventive_aspects,
                   rehabilitation: formData.rehabilitation,
                   desired_outcome: formData.desired_outcome,
+                  OPD_NEXT_FOLLOW_UP: formData.OPD_NEXT_FOLLOW_UP || "",
                   procedures: allProcedures,
                   internal_medications: allMedications,
                   created_at: new Date().toISOString()
@@ -2399,6 +2421,7 @@ export default function CaseSheetForm({ initialCaseSheet, patientUhId, opNo, doc
                         <div class="section"><b>• Preventive aspects Pathya Apathys Nidana Pariyarjana, (if any):</b><div class="value">${printData.preventive_aspects || ''}</div></div>
                         <div class="section"><b>• Rehabilitation-Physiotherapy/Basayana Apunarbhay:</b><div class="value">${printData.rehabilitation || ''}</div></div>
                         <div class="section"><b>• Desired outcome:</b><div class="value">${printData.desired_outcome || ''}</div></div>
+                        <div class="section"><b>• Next OPD Follow-up:</b><div class="value">${printData.OPD_NEXT_FOLLOW_UP || ''}</div></div>
                         
                         <div class="footer">
                           <div>Date: ${new Date().toLocaleDateString()}</div>

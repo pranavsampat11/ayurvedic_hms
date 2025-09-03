@@ -40,6 +40,7 @@ type CaseSheetData = {
   preventive_aspects?: string;
   rehabilitation?: string;
   desired_outcome?: string;
+  OPD_NEXT_FOLLOW_UP?: string;
   created_at?: string;
   // Procedures and medications
   procedures?: any[];
@@ -354,6 +355,7 @@ export default function PrintableCaseSheet({ data }: { data: CaseSheetData }) {
               <div class="section"><b>• Preventive aspects Pathya Apathys Nidana Pariyarjana, (if any):</b><div class="value">${data.preventive_aspects || ''}</div></div>
               <div class="section"><b>• Rehabilitation-Physiotherapy/Basayana Apunarbhay:</b><div class="value">${data.rehabilitation || ''}</div></div>
               <div class="section"><b>• Desired outcome:</b><div class="value">${data.desired_outcome || ''}</div></div>
+              <div class="section"><b>• Next OPD Follow-up:</b><div class="value">${data.OPD_NEXT_FOLLOW_UP || ''}</div></div>
               
               <div class="footer">
                 <div>Date: ${data.created_at ? new Date(data.created_at).toLocaleDateString() : ""}</div>
@@ -585,6 +587,11 @@ export default function PrintableCaseSheet({ data }: { data: CaseSheetData }) {
         <div className="mb-3">
           <b className="text-black text-sm">• Desired outcome:</b>
           <div className="ml-5 border-b border-gray-300 pb-1 min-h-[20px]">{data.desired_outcome || ""}</div>
+        </div>
+        
+        <div className="mb-3">
+          <b className="text-black text-sm">• Next OPD Follow-up:</b>
+          <div className="ml-5 border-b border-gray-300 pb-1 min-h-[20px]">{data.OPD_NEXT_FOLLOW_UP || ""}</div>
         </div>
         
         <div className="mt-8 flex justify-between border-t border-gray-800 pt-4 text-xs">

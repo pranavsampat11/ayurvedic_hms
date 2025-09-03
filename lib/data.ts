@@ -435,3 +435,78 @@ export const assignIPD = (uhid: string) => {
   // For now, it will just log a warning
   console.warn("assignIPD is not yet implemented for Supabase")
 }
+
+// ---------------------------------------------------------------------------
+// Temporary stubs to satisfy legacy imports during deployment
+// Replace these with real Supabase-backed implementations.
+
+// Patients and OPD/IPD utilities
+export function getPatients(..._args: any[]): any[] {
+  return []
+}
+
+export async function updatePatientStatus(_uhid: string, _status: any): Promise<void> {
+  console.warn("updatePatientStatus (stub) called")
+}
+
+// Beds
+export function getBeds(..._args: any[]): any[] {
+  return []
+}
+
+export function getAvailableBeds(..._args: any[]): any[] {
+  return []
+}
+
+export async function assignBedToPatient(_bedId: string, _uhid: string): Promise<void> {
+  console.warn("assignBedToPatient (stub) called")
+}
+
+export async function dischargePatientFromBed(_bedId: string): Promise<void> {
+  console.warn("dischargePatientFromBed (stub) called")
+}
+
+// Staff
+export function getStaff(..._args: any[]): any[] {
+  return []
+}
+
+export async function addStaff(_staff: any): Promise<{ id?: string }> {
+  console.warn("addStaff (stub) called")
+  return { id: undefined }
+}
+
+export async function updateStaff(_id: string, _updates: any): Promise<void> {
+  console.warn("updateStaff (stub) called")
+}
+
+export async function deleteStaff(_id: string): Promise<void> {
+  console.warn("deleteStaff (stub) called")
+}
+
+// Inventory
+export function getInventory(..._args: any[]): any[] {
+  return []
+}
+
+// Invoices & Payments
+export async function deleteInvoice(_id: string): Promise<void> {
+  console.warn("deleteInvoice (stub) called")
+}
+
+export async function updatePayment(_id: string, _updates: any): Promise<void> {
+  console.warn("updatePayment (stub) called")
+}
+
+export async function deletePayment(_id: string): Promise<void> {
+  console.warn("deletePayment (stub) called")
+}
+
+// Consultations
+export async function updateConsultation(_id: string, _updates: any): Promise<void> {
+  console.warn("updateConsultation (stub) called")
+}
+
+export async function deleteConsultation(_id: string): Promise<void> {
+  console.warn("deleteConsultation (stub) called")
+}
